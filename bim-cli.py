@@ -20,6 +20,9 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.completion import Completer, Completion
 from dotenv import load_dotenv
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
 # Required imports
 try:
@@ -260,28 +263,42 @@ class BIMCore:
             return False
     
     def show_available_tools(self):
-        """Display available tools"""
+        """Display available tools as bullet points"""
         if not self.tools:
             return
         
-        print(f"\n{Fore.CYAN}Available Tools:{Style.RESET_ALL}")
-        for i, tool in enumerate(self.tools, 1):
-            print(f"   {i}. {Fore.YELLOW}{tool.name}{Style.RESET_ALL}: {tool.description}")
+        console = Console()
+        console.print(f"\n[cyan]Available Tools ({len(self.tools)}):[/cyan]")
+        
+        for tool in self.tools:
+            console.print(f"  • [yellow]{tool.name}[/yellow]")
     
     async def run_direct_claude(self, query: str) -> str:
-        """Run query with direct Claude (no MCP)"""
+        """Run query with direct Claude (no MCP), with optional streaming and rich formatting"""
         start_time = datetime.now()
-        
+        stream_enabled = self.config.config.get("claude", {}).get("stream", False)
+        console = Console()
         try:
-            response = await self.claude.ainvoke([HumanMessage(content=query)])
-            
-            if self.config.config["ui"]["show_timing"]:
-                elapsed = (datetime.now() - start_time).total_seconds()
-                print(f"{Fore.MAGENTA} Response time: {elapsed:.2f}s{Style.RESET_ALL}")
-            
-            return response.content
-            
+            if stream_enabled:
+                response_text = ""
+                console.print("[cyan]Processing...[/cyan]")
+                async for chunk in self.claude.astream([HumanMessage(content=query)]):
+                    if hasattr(chunk, "content") and chunk.content:
+                        response_text += chunk.content
+                        console.print(chunk.content, style="cyan", end="", soft_wrap=True)
+                console.print()  # Newline after streaming
+                if self.config.config["ui"]["show_timing"]:
+                    elapsed = (datetime.now() - start_time).total_seconds()
+                    console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
+                return response_text
+            else:
+                response = await self.claude.ainvoke([HumanMessage(content=query)])
+                if self.config.config["ui"]["show_timing"]:
+                    elapsed = (datetime.now() - start_time).total_seconds()
+                    console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
+                return response.content
         except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
             return f"Error: {e}"
     
     async def run_with_mcp(self, query: str, use_react: bool = False) -> str:
@@ -290,18 +307,44 @@ class BIMCore:
             return await self.run_direct_claude(query)
         
         start_time = datetime.now()
+        console = Console()
         
         try:
             if use_react:
-                # Use React agent
+                # Use React agent - create without system_message parameter
                 agent = create_react_agent(
                     self.claude,
-                    self.tools,
-                    system_message="You are a helpful assistant with access to various tools through MCP servers. Use them when appropriate to provide accurate and helpful responses."
+                    self.tools
                 )
                 
-                result = await agent.ainvoke({"messages": [HumanMessage(content=query)]})
-                response = result["messages"][-1].content
+                # Create a system message to include in the conversation
+                system_content = "You are a helpful assistant with access to various tools through MCP servers. Use them when appropriate to provide accurate and helpful responses."
+                
+                result = await agent.ainvoke({
+                    "messages": [
+                        SystemMessage(content=system_content),
+                        HumanMessage(content=query)
+                    ]
+                })
+                last_message = result["messages"][-1]
+                
+                # Handle different content types
+                if hasattr(last_message, 'content'):
+                    content = last_message.content
+                    if isinstance(content, list):
+                        # Extract text from content blocks
+                        response = ""
+                        for block in content:
+                            if isinstance(block, dict) and 'text' in block:
+                                response += block['text']
+                            elif isinstance(block, str):
+                                response += block
+                            else:
+                                response += str(block)
+                    else:
+                        response = str(content)
+                else:
+                    response = str(last_message)
                 
             else:
                 # Use tool calling agent
@@ -325,7 +368,7 @@ class BIMCore:
             
             if self.config.config["ui"]["show_timing"]:
                 elapsed = (datetime.now() - start_time).total_seconds()
-                print(f"{Fore.MAGENTA} Response time: {elapsed:.2f}s{Style.RESET_ALL}")
+                console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
             
             return response
             
@@ -411,8 +454,8 @@ class BIMCLI:
             "  /mcp add-servers-dir <dir_path> - Add MCP servers from all JSON files in a directory\n"
             "\n"
             "Agent Commands:\n"
-            "  /agent react             - Use React agent (when MCP enabled)\n"
-            "  /agent tool              - Use tool calling agent (when MCP enabled)\n"
+            "  /agent react             - Use React agent (recommended for MCP)\n"
+            "  /agent tool              - Use tool calling agent (faster but less capable)\n"
             "  /agent status            - Show current agent type\n"
             "\n"
             "Usage Examples:\n"
@@ -464,6 +507,10 @@ class BIMCLI:
         if action == "on":
             success = await self.core.setup_mcp_servers()
             self.mcp_enabled = success
+            if success:
+                console = Console()
+                console.print(f"\n[green]💡 Tip: Use [bold]/agent react[/bold] for better MCP tool integration[/green]")
+                console.print(f"[dim]Current agent: {'React' if self.use_react else 'Tool Calling'}[/dim]")
             
         elif action == "off":
             self.mcp_enabled = False
@@ -538,15 +585,24 @@ class BIMCLI:
     
     async def process_query(self, query: str):
         """Process user query"""
-        print("Processing...")
-        
+        from rich.console import Console
+        from rich.markdown import Markdown
+        from rich.panel import Panel
+        console = Console()
         if self.mcp_enabled:
-            response = await self.core.run_with_mcp(query, self.use_react)
+            with console.status("[cyan]Processing with MCP...[/cyan]"):
+                response = await self.core.run_with_mcp(query, self.use_react)
         else:
             response = await self.core.run_direct_claude(query)
-        
-        print("\nResponse:")
-        print(response)
+        if response:
+            console.print(
+                Panel(
+                    Markdown(response),
+                    title="[bold cyan]Response[/bold cyan]",
+                    border_style="bright_blue",
+                    padding=(1, 2),
+                )
+            )
     
     async def run(self):
         """Main CLI loop"""

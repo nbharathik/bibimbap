@@ -6,3 +6,4 @@ langchain-mcp-adapters>=0.1.0
 colorama>=0.4.6
 nest_asyncio
 python-dotenv
+rich
