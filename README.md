@@ -1,17 +1,6 @@
 # BIM-CLI: Connect BIM tools to LLMs
 
-A flexible, extensible command-line interface for working with Claude and Model Context Protocol (MCP) servers.
-
-## Features
-
-- Easy to Use: Start with `python bim-cli.py`
-- Flexible Configuration: All MCP servers are managed in a single JSON config file
-- Hot-Pluggable MCP Integration: Add or remove MCP servers at runtime, or load all from a directory
-- Interactive Shell: Tab-completion for commands and server names using prompt_toolkit
-- Clear Error Messages: See full command and environment if a server fails to start
-- Server Status: Check if each MCP server is enabled, running, or failed
-- Multiple Agent Types: Tool Calling and React agents
-- Colorful, Human-Friendly CLI Output
+A command-line interface for working with Claude and Model Context Protocol (MCP) servers.
 
 ## Quick Start
 
@@ -66,41 +55,9 @@ python bim-cli.py
 - `agent tool` - Use Tool Calling agent
 - `agent status` - Show current agent type
 
-### Example Session
-```
-BIM-CLI> mcp on
-Setting up MCP servers...
-MCP servers connected successfully!
-Total tools available: 8
-
-BIM-CLI> mcp list
-MCP Servers:
-  filesystem: Enabled | Status: running - File system access
-  math: Enabled | Status: running - Math operations
-  web_search: Disabled | Status: unknown - Web search
-
-BIM-CLI> mcp add-server servers/my_custom_server.json
-Added server 'my_custom_server' from servers/my_custom_server.json
-
-BIM-CLI> mcp add-servers-dir mcp_servers/
-Added server 'foo' from mcp_servers/foo.json
-Added server 'bar' from mcp_servers/bar.json
-Total servers added from directory: 2
-
-BIM-CLI> mcp status
-MCP Status:
-   Enabled: True
-   Active Servers: 3
-   Available Tools: 8
-
-BIM-CLI> What is the capital of France?
-Response:
-The capital of France is Paris.
-```
-
 ## Configuration
 
-All configuration is in `bim-config.json` in the project root. Example:
+All configuration is in `configs/config.json` in the project root. Example:
 ```json
 {
   "version": "1.0.0",
@@ -136,59 +93,4 @@ All configuration is in `bim-config.json` in the project root. Example:
   }
 }
 ```
-
-- To add a new server, use `mcp add-server <file>` or add it manually to the config.
-- To remove, use `mcp remove-server <name>`.
-- To bulk add, use `mcp add-servers-dir <dir_path>`.
-
-## Advanced Features
-
-- **Environment Variables:**
-  Set `env_vars` in your server config to pass environment variables to the server process.
-- **Custom Headers:**
-  For HTTP servers, set `headers` in the config.
-- **Error Reporting:**
-  If a server fails to start, the CLI will show the full command, arguments, and environment used.
-- **Tab Completion:**
-  The CLI uses prompt_toolkit for interactive tab-completion of commands and server names.
-- **Server Status:**
-  See if each server is enabled, running, or failed with `mcp list` or `status`.
-
-## Project Structure
-
-```
-bim-cli/
-├── bim-cli.py              # Main CLI application
-├── setup.py                # Setup script
-├── requirements.txt        # Python dependencies
-├── bim-config.json         # Configuration file (auto-generated)
-├── servers/                # Example MCP servers
-│   ├── math_server.py      # Math operations
-│   └── web_search_server.py # Web search
-├── mcp_servers/            # (Optional) Directory for plug-and-play server configs
-└── configs/                # Example configurations
-```
-
-## Troubleshooting
-
-- If a server fails to start, check the printed command, arguments, and environment.
-- Make sure all dependencies are installed:
-  ```bash
-  pip install -r requirements.txt
-  ```
-- For Node.js MCP servers:
-  ```bash
-  npm install -g @modelcontextprotocol/server-filesystem
-  ```
-- If you see API key errors:
-  ```bash
-  export ANTHROPIC_API_KEY="your-key-here"
-  ```
-
-## License
-
-MIT License - use, share, and modify as you like.
-
----
-
-For more about MCP servers, visit: https://modelcontextprotocol.io/
+Copy `configs/.env.example` to `configs/.env` and fill in your API keys.

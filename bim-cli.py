@@ -19,6 +19,7 @@ import argparse
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.completion import Completer, Completion
+from dotenv import load_dotenv
 
 # Required imports
 try:
@@ -36,6 +37,11 @@ except ImportError as e:
     print(f"Missing dependencies: {e}")
     print("Install with: pip install langchain-anthropic langchain langgraph langchain-mcp-adapters colorama")
     sys.exit(1)
+
+# Load environment variables from .env file in configs/
+env_path = Path(__file__).parent / 'configs' / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 logging.basicConfig(level=logging.WARNING)
@@ -58,84 +64,29 @@ class MCPServerConfig:
 class BIMConfig:
     """Configuration manager for BIM-CLI"""
     
-    def __init__(self, config_file: str = "bim-config.json"):
+    def __init__(self, config_file: str = None):
+        # Default to configs/config.json for all config
+        if config_file is None:
+            config_file = str(Path(__file__).parent / 'configs' / 'config.json')
         self.config_file = Path(config_file)
         self.config = self.load_config()
     
     def load_config(self) -> Dict[str, Any]:
         """Load configuration from file"""
         if not self.config_file.exists():
-            return self.create_default_config()
-        
+            print(f"Config file {self.config_file} not found. Please copy config.example.json to config.json and edit as needed.")
+            sys.exit(1)
         try:
             with open(self.config_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
             print(f"Error loading config: {e}")
-            return self.create_default_config()
+            sys.exit(1)
     
     def create_default_config(self) -> Dict[str, Any]:
-        """Create default configuration"""
-        default_config = {
-            "version": "1.0.0",
-            "claude": {
-                "model": "claude-3-5-sonnet-20241022",
-                "temperature": 0.1,
-                "max_tokens": 4096
-            },
-            "mcp_servers": {
-                "filesystem": {
-                    "name": "filesystem",
-                    "enabled": True,
-                    "transport": "stdio",
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
-                    "description": "File system access for current directory"
-                },
-                "math": {
-                    "name": "math",
-                    "enabled": False,
-                    "transport": "stdio",
-                    "command": "python",
-                    "args": ["servers/math_server.py"],
-                    "description": "Mathematical calculations"
-                },
-                "sqlite": {
-                    "name": "sqlite",
-                    "enabled": False,
-                    "transport": "stdio",
-                    "command": "npx",
-                    "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "database.db"],
-                    "description": "SQLite database access"
-                },
-                "web_search": {
-                    "name": "web_search",
-                    "enabled": False,
-                    "transport": "stdio",
-                    "command": "python",
-                    "args": ["servers/web_search_server.py"],
-                    "env_vars": {"SEARCH_API_KEY": "your-search-api-key"},
-                    "description": "Web search capabilities"
-                },
-                "custom_http": {
-                    "name": "custom_http",
-                    "enabled": False,
-                    "transport": "streamable_http",
-                    "url": "http://localhost:8000/mcp/",
-                    "headers": {"Authorization": "Bearer your-token"},
-                    "description": "Custom HTTP MCP server"
-                }
-            },
-            "ui": {
-                "show_tools": True,
-                "show_timing": True,
-                "colored_output": True,
-                "prompt_prefix": "BIM-CLI"
-            }
-        }
-        
-        self.save_config(default_config)
-        return default_config
+        """No longer used. configs/servers.json is required."""
+        print("Please create configs/servers.json from servers.example.json.")
+        sys.exit(1)
     
     def save_config(self, config: Dict[str, Any] = None):
         """Save configuration to file"""

@@ -1,9 +1,16 @@
 {
   "version": "1.0.0",
+
   "claude": {
     "model": "claude-3-5-sonnet-20241022",
     "temperature": 0.1,
     "max_tokens": 4096
+  },
+  "ui": {
+    "show_tools": true,
+    "show_timing": true,
+    "colored_output": true,
+    "prompt_prefix": "BIM-CLI"
   },
   "mcp_servers": {
     "blender": {
@@ -11,18 +18,9 @@
       "enabled": true,
       "transport": "stdio",
       "command": "python",
-      "args": [
-        "-m",
-        "blender_mcp.server"
-      ],
-      "cwd": "C:/Users/bhara/Documents/University of Rostock/Project/bonsai-blender-mcp/src/blender_mcp",
+      "args": ["-m", "blender_mcp.server"],
+      "cwd": "path/to/blender_mcp",
       "description": "Blender MCP server integration"
     }
-  },
-  "ui": {
-    "show_tools": true,
-    "show_timing": true,
-    "colored_output": true,
-    "prompt_prefix": "BIM-CLI"
   }
 }

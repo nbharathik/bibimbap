@@ -8,7 +8,6 @@ import os
 import requests
 from mcp.server.fastmcp import FastMCP
 
-# Create MCP server
 mcp = FastMCP("Web Search")
 
 @mcp.tool()
@@ -20,10 +19,6 @@ def search_web(query: str, num_results: int = 5) -> str:
         return "Error: SEARCH_API_KEY environment variable not set"
     
     try:
-        # This is a placeholder - replace with actual search API
-        # For example, you could use DuckDuckGo, Google Custom Search, etc.
-        
-        # Mock search results for demo
         results = [
             {"title": f"Search result {i} for '{query}'", 
              "url": f"https://example.com/result{i}",
@@ -31,7 +26,6 @@ def search_web(query: str, num_results: int = 5) -> str:
             for i in range(1, num_results + 1)
         ]
         
-        # Format results
         formatted_results = []
         for i, result in enumerate(results, 1):
             formatted_results.append(f"{i}. {result['title']}")
@@ -51,13 +45,12 @@ def get_webpage_content(url: str) -> str:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         
-        # Simple text extraction (in real implementation, use BeautifulSoup)
-        content = response.text[:1000]  # Limit to first 1000 characters
+        content = response.text[:1000] 
         return f"Content from {url}:\n{content}"
         
     except Exception as e:
         return f"Error fetching webpage: {str(e)}"
 
 if __name__ == "__main__":
-    print("🔍 Starting Web Search MCP Server...")
+    print("Starting Web Search MCP Server...")
     mcp.run(transport="stdio")
