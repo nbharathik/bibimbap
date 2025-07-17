@@ -50,11 +50,6 @@ python bim-cli.py
 - `mcp remove-server <name>` - Remove an MCP server by name
 - `mcp add-servers-dir <dir_path>` - Add all MCP servers from JSON files in a directory
 
-### Agent Commands
-- `agent react` - Use React agent
-- `agent tool` - Use Tool Calling agent
-- `agent status` - Show current agent type
-
 ## Configuration
 
 All configuration is in `configs/config.json` in the project root. Example:
@@ -83,7 +78,6 @@ All configuration is in `configs/config.json` in the project root. Example:
       "args": ["servers/math_server.py"],
       "description": "Math operations"
     }
-    // ... more servers ...
   },
   "ui": {
     "show_tools": true,
