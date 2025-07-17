@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+
+  "claude": {
+    "model": "claude-3-5-sonnet-20241022",
+    "temperature": 0.1,
+    "max_tokens": 4096
+  },
+
+  "mcp_servers": {
+    "filesystem": {
+      "name": "filesystem",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "description": "File system access"
+    },
+    "math": {
+      "name": "math",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "python",
+      "args": ["servers/math_server.py"],
+      "description": "Math operations"
+    },
+    "sqlite": {
+      "name": "sqlite",
+      "enabled": false,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "--db-path",
+        "database.db"
+      ],
+      "description": "SQLite database"
+    },
+    "web_search": {
+      "name": "web_search",
+      "enabled": false,
+      "transport": "stdio",
+      "command": "python",
+      "args": ["servers/web_search_server.py"],
+      "env_vars": {
+        "SEARCH_API_KEY": "your-search-api-key"
+      },
+      "description": "Web search"
+    },
+    "custom_http": {
+      "name": "custom_http",
+      "enabled": false,
+      "transport": "streamable_http",
+      "url": "http://localhost:8000/mcp/",
+      "headers": {
+        "Authorization": "Bearer your-token"
+      },
+      "description": "Custom HTTP server"
+    }
+  },
+
+  "ui": {
+    "show_tools": true,
+    "show_timing": true,
+    "colored_output": true,
+    "prompt_prefix": "BIM-CLI"
+  }
+}
