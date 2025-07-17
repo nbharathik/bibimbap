@@ -310,70 +310,84 @@ class BIMCore:
             return f"Error: {e}"
     
     async def run_with_mcp(self, query: str) -> str:
-        """Run query with MCP tools using native Anthropic tool calling"""
-        if not self.tools:
-            return await self.run_direct_claude(query)
-        
+        """Run query with MCP tools using native Anthropic tool calling, with streaming support and immediate tool result display"""
+        from rich.live import Live
+        from rich.text import Text
+        from rich.panel import Panel
+        from rich.markdown import Markdown
         start_time = datetime.now()
         console = Console()
-        
+        full_response = ""  # Accumulate all text responses
         try:
-            # Convert MCP tools to Anthropic format
             anthropic_tools = self.convert_mcp_tools_to_anthropic(self.tools)
-            
-            # Create initial message
             messages = [{"role": "user", "content": query}]
             
             while True:
-                # Call Claude with tools
-                message = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
-                    tools=anthropic_tools,
-                    messages=messages
-                )
+                # Streaming response from Claude with tools
+                streamed_response = ""
+                tool_calls = []
+                
+                with Live(Text(""), console=console, refresh_per_second=8) as live:
+                    # Use a with-statement to ensure the stream is closed
+                    with self.client.messages.stream(
+                        model=self.model,
+                        max_tokens=self.max_tokens,
+                        temperature=self.temperature,
+                        tools=anthropic_tools,
+                        messages=messages
+                    ) as stream:
+                        for text in stream.text_stream:
+                            streamed_response += text
+                            live.update(Text(streamed_response))
+                
+                # After the stream is finished, get the final message
+                final_message = stream.get_final_message()
+
+                # Extract any tool calls
+                for content_block in final_message.content:
+                    if content_block.type == "tool_use":
+                        tool_calls.append(content_block)
+
+                # Add this cycle's streamed content to the full response
+                if streamed_response:
+                    if full_response:
+                        full_response += "\n\n" + streamed_response
+                    else:
+                        full_response = streamed_response
                 
                 # Add assistant's response to messages
-                messages.append({
-                    "role": "assistant", 
-                    "content": message.content
-                })
+                messages.append({"role": "assistant", "content": final_message.content})
                 
-                # Check if Claude wants to use tools
-                tool_calls = [content for content in message.content if content.type == "tool_use"]
-                
+                # If no tool calls, we're done
                 if not tool_calls:
-                    # No tools called, return the response
-                    text_content = [content for content in message.content if content.type == "text"]
-                    response = text_content[0].text if text_content else "No response"
                     break
                 
-                # Execute tool calls
+                # Execute tool calls and show results immediately
                 tool_results = []
                 for tool_call in tool_calls:
                     try:
-                        # Find the MCP tool
                         mcp_tool = next(tool for tool in self.tools if tool.name == tool_call.name)
-                        
-                        # Execute the tool
                         result = await mcp_tool.ainvoke(tool_call.input)
-                        
+                        tool_result_content = str(result)
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tool_call.id,
-                            "content": str(result)
+                            "content": tool_result_content
                         })
-                        
+                        # Show tool result immediately (mimic Claude API/Console)
+                        console.print()
+                        console.print(Panel(Markdown(tool_result_content), title=f"[bold green]Tool: {tool_call.name}[/bold green]", border_style="green", padding=(1, 2)))
                     except Exception as e:
+                        error_msg = f"Error: {str(e)}"
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tool_call.id,
-                            "content": f"Error: {str(e)}",
+                            "content": error_msg,
                             "is_error": True
                         })
+                        console.print(Panel(error_msg, title=f"[bold red]Tool Error: {tool_call.name}[/bold red]", border_style="red", padding=(1, 2)))
                 
-                # Add tool results to messages
+                # Add tool results to continue the conversation
                 messages.append({
                     "role": "user",
                     "content": tool_results
@@ -383,8 +397,7 @@ class BIMCore:
                 elapsed = (datetime.now() - start_time).total_seconds()
                 console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
             
-            return response
-            
+            return full_response
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             return f"Error: {e}"
