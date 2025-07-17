@@ -24,7 +24,6 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
-# Required imports
 try:
     import anthropic
     from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -57,7 +56,7 @@ class MCPServerConfig:
     url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
     env_vars: Optional[Dict[str, str]] = None
-    cwd: Optional[str] = None  # Add cwd for working directory support
+    cwd: Optional[str] = None 
     description: Optional[str] = None
 
 class BIMConfig:
@@ -328,7 +327,6 @@ class BIMCore:
                 tool_calls = []
                 
                 with Live(Text(""), console=console, refresh_per_second=8) as live:
-                    # Use a with-statement to ensure the stream is closed
                     with self.client.messages.stream(
                         model=self.model,
                         max_tokens=self.max_tokens,
