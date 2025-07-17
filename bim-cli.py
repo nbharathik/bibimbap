@@ -26,11 +26,7 @@ from rich.panel import Panel
 
 # Required imports
 try:
-    from langchain_anthropic import ChatAnthropic
-    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-    from langchain.agents import create_tool_calling_agent, AgentExecutor
-    from langchain.prompts import ChatPromptTemplate
-    from langgraph.prebuilt import create_react_agent
+    import anthropic
     from langchain_mcp_adapters.client import MultiServerMCPClient
     from langchain_mcp_adapters.tools import load_mcp_tools
     import colorama
@@ -38,7 +34,7 @@ try:
     colorama.init()
 except ImportError as e:
     print(f"Missing dependencies: {e}")
-    print("Install with: pip install langchain-anthropic langchain langgraph langchain-mcp-adapters colorama")
+    print("Install with: pip install anthropic langchain-mcp-adapters colorama")
     sys.exit(1)
 
 # Load environment variables from .env file in configs/
@@ -185,28 +181,25 @@ class BIMCore:
     
     def __init__(self, config: BIMConfig):
         self.config = config
-        self.claude = None
+        self.client = None
         self.mcp_client = None
         self.tools = []
-        self.agent = None
-        self.initialize_claude()
+        self.initialize_anthropic()
     
-    def initialize_claude(self):
-        """Initialize Claude model"""
+    def initialize_anthropic(self):
+        """Initialize Anthropic client"""
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             print(f"{Fore.RED}ANTHROPIC_API_KEY environment variable not set{Style.RESET_ALL}")
             sys.exit(1)
         
+        self.client = anthropic.Anthropic(api_key=api_key)
         claude_config = self.config.config["claude"]
-        self.claude = ChatAnthropic(
-            anthropic_api_key=api_key,
-            model_name=claude_config["model"],
-            temperature=claude_config["temperature"],
-            max_tokens=claude_config["max_tokens"]
-        )
+        self.model = claude_config["model"]
+        self.temperature = claude_config["temperature"]
+        self.max_tokens = claude_config["max_tokens"]
         
-        print(f"{Fore.GREEN}Claude initialized: {claude_config['model']}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}Anthropic initialized: {self.model}{Style.RESET_ALL}")
     
     async def setup_mcp_servers(self) -> bool:
         """Setup enabled MCP servers"""
@@ -273,98 +266,34 @@ class BIMCore:
         for tool in self.tools:
             console.print(f"  • [yellow]{tool.name}[/yellow]")
     
-    async def run_direct_claude(self, query: str) -> str:
-        """Run query with direct Claude (no MCP), with optional streaming and rich formatting"""
-        start_time = datetime.now()
-        stream_enabled = self.config.config.get("claude", {}).get("stream", False)
-        console = Console()
-        try:
-            if stream_enabled:
-                response_text = ""
-                console.print("[cyan]Processing...[/cyan]")
-                async for chunk in self.claude.astream([HumanMessage(content=query)]):
-                    if hasattr(chunk, "content") and chunk.content:
-                        response_text += chunk.content
-                        console.print(chunk.content, style="cyan", end="", soft_wrap=True)
-                console.print()  # Newline after streaming
-                if self.config.config["ui"]["show_timing"]:
-                    elapsed = (datetime.now() - start_time).total_seconds()
-                    console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
-                return response_text
-            else:
-                response = await self.claude.ainvoke([HumanMessage(content=query)])
-                if self.config.config["ui"]["show_timing"]:
-                    elapsed = (datetime.now() - start_time).total_seconds()
-                    console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
-                return response.content
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            return f"Error: {e}"
+    def convert_mcp_tools_to_anthropic(self, mcp_tools):
+        """Convert MCP tools to Anthropic tool format"""
+        anthropic_tools = []
+        for tool in mcp_tools:
+            anthropic_tool = {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.args_schema
+            }
+            anthropic_tools.append(anthropic_tool)
+        return anthropic_tools
     
-    async def run_with_mcp(self, query: str, use_react: bool = False) -> str:
-        """Run query with MCP tools"""
-        if not self.tools:
-            return await self.run_direct_claude(query)
-        
+    async def run_direct_claude(self, query: str) -> str:
+        """Run query with direct Claude (no MCP)"""
         start_time = datetime.now()
         console = Console()
         
         try:
-            if use_react:
-                # Use React agent - create without system_message parameter
-                agent = create_react_agent(
-                    self.claude,
-                    self.tools
-                )
-                
-                # Create a system message to include in the conversation
-                system_content = "You are a helpful assistant with access to various tools through MCP servers. Use them when appropriate to provide accurate and helpful responses."
-                
-                result = await agent.ainvoke({
-                    "messages": [
-                        SystemMessage(content=system_content),
-                        HumanMessage(content=query)
-                    ]
-                })
-                last_message = result["messages"][-1]
-                
-                # Handle different content types
-                if hasattr(last_message, 'content'):
-                    content = last_message.content
-                    if isinstance(content, list):
-                        # Extract text from content blocks
-                        response = ""
-                        for block in content:
-                            if isinstance(block, dict) and 'text' in block:
-                                response += block['text']
-                            elif isinstance(block, str):
-                                response += block
-                            else:
-                                response += str(block)
-                    else:
-                        response = str(content)
-                else:
-                    response = str(last_message)
-                
-            else:
-                # Use tool calling agent
-                prompt = ChatPromptTemplate.from_messages([
-                    ("system", "You are a helpful assistant with access to various tools through MCP servers. Use them when appropriate to provide accurate and helpful responses."),
-                    ("placeholder", "{chat_history}"),
-                    ("human", "{input}"),
-                    ("placeholder", "{agent_scratchpad}"),
-                ])
-                
-                agent = create_tool_calling_agent(self.claude, self.tools, prompt)
-                agent_executor = AgentExecutor(
-                    agent=agent,
-                    tools=self.tools,
-                    verbose=False,
-                    handle_parsing_errors=True
-                )
-                
-                result = await agent_executor.ainvoke({"input": query})
-                response = result["output"]
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                messages=[
+                    {"role": "user", "content": query}
+                ]
+            )
+            
+            response = message.content[0].text
             
             if self.config.config["ui"]["show_timing"]:
                 elapsed = (datetime.now() - start_time).total_seconds()
@@ -373,6 +302,87 @@ class BIMCore:
             return response
             
         except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return f"Error: {e}"
+    
+    async def run_with_mcp(self, query: str) -> str:
+        """Run query with MCP tools using native Anthropic tool calling"""
+        if not self.tools:
+            return await self.run_direct_claude(query)
+        
+        start_time = datetime.now()
+        console = Console()
+        
+        try:
+            # Convert MCP tools to Anthropic format
+            anthropic_tools = self.convert_mcp_tools_to_anthropic(self.tools)
+            
+            # Create initial message
+            messages = [{"role": "user", "content": query}]
+            
+            while True:
+                # Call Claude with tools
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    tools=anthropic_tools,
+                    messages=messages
+                )
+                
+                # Add assistant's response to messages
+                messages.append({
+                    "role": "assistant", 
+                    "content": message.content
+                })
+                
+                # Check if Claude wants to use tools
+                tool_calls = [content for content in message.content if content.type == "tool_use"]
+                
+                if not tool_calls:
+                    # No tools called, return the response
+                    text_content = [content for content in message.content if content.type == "text"]
+                    response = text_content[0].text if text_content else "No response"
+                    break
+                
+                # Execute tool calls
+                tool_results = []
+                for tool_call in tool_calls:
+                    try:
+                        # Find the MCP tool
+                        mcp_tool = next(tool for tool in self.tools if tool.name == tool_call.name)
+                        
+                        # Execute the tool
+                        result = await mcp_tool.ainvoke(tool_call.input)
+                        
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call.id,
+                            "content": str(result)
+                        })
+                        
+                    except Exception as e:
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call.id,
+                            "content": f"Error: {str(e)}",
+                            "is_error": True
+                        })
+                
+                # Add tool results to messages
+                messages.append({
+                    "role": "user",
+                    "content": tool_results
+                })
+            
+            if self.config.config["ui"]["show_timing"]:
+                elapsed = (datetime.now() - start_time).total_seconds()
+                console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
+            
+            return response
+            
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
             return f"Error: {e}"
 
 class SpecialCharCompleter(Completer):
@@ -406,11 +416,10 @@ class BIMCLI:
         self.config = BIMConfig()
         self.core = BIMCore(self.config)
         self.mcp_enabled = False
-        self.use_react = False
         # Only show completions for special prefixes
         self.special_commands = [
             '/help', '/quit', '/exit', '/clear', '/status', '/config',
-            '/mcp', '/agent',
+            '/mcp',
             '#search', '#info', '#tools', '@user', '@admin'
         ]
         self.session = PromptSession()
@@ -453,11 +462,6 @@ class BIMCLI:
             "  /mcp remove-server <name> - Remove an MCP server\n"
             "  /mcp add-servers-dir <dir_path> - Add MCP servers from all JSON files in a directory\n"
             "\n"
-            "Agent Commands:\n"
-            "  /agent react             - Use React agent (recommended for MCP)\n"
-            "  /agent tool              - Use tool calling agent (faster but less capable)\n"
-            "  /agent status            - Show current agent type\n"
-            "\n"
             "Usage Examples:\n"
             "  What is the capital of France?\n"
             "  /mcp on\n"
@@ -473,7 +477,6 @@ class BIMCLI:
         print(f"  Claude Model: {self.config.config['claude']['model']}")
         print(f"  MCP Enabled: {self.mcp_enabled}")
         print(f"  Tools Available: {len(self.core.tools)}")
-        print(f"  Agent Type: {'React' if self.use_react else 'Tool Calling'}")
         # Show MCP server process status if possible
         if self.core.mcp_client and hasattr(self.core.mcp_client, 'get_server_status'):
             status = self.core.mcp_client.get_server_status()
@@ -509,8 +512,6 @@ class BIMCLI:
             self.mcp_enabled = success
             if success:
                 console = Console()
-                console.print(f"\n[green]💡 Tip: Use [bold]/agent react[/bold] for better MCP tool integration[/green]")
-                console.print(f"[dim]Current agent: {'React' if self.use_react else 'Tool Calling'}[/dim]")
             
         elif action == "off":
             self.mcp_enabled = False
@@ -558,31 +559,6 @@ class BIMCLI:
         else:
             print(f"{Fore.RED}Unknown MCP command: {action}{Style.RESET_ALL}")
     
-    def handle_agent_command(self, command: str):
-        """Handle agent-related commands"""
-        parts = command.split()
-        
-        if len(parts) < 2:
-            print(f"{Fore.RED}Invalid agent command. Type 'help' for usage.{Style.RESET_ALL}")
-            return
-        
-        action = parts[1].lower()
-        
-        if action == "react":
-            self.use_react = True
-            print(f"{Fore.GREEN}Switched to React agent{Style.RESET_ALL}")
-            
-        elif action == "tool":
-            self.use_react = False
-            print(f"{Fore.GREEN}Switched to Tool Calling agent{Style.RESET_ALL}")
-            
-        elif action == "status":
-            agent_type = "React" if self.use_react else "Tool Calling"
-            print(f"{Fore.CYAN}Current Agent: {Fore.YELLOW}{agent_type}{Style.RESET_ALL}")
-            
-        else:
-            print(f"{Fore.RED}Unknown agent command: {action}{Style.RESET_ALL}")
-    
     async def process_query(self, query: str):
         """Process user query"""
         from rich.console import Console
@@ -591,7 +567,7 @@ class BIMCLI:
         console = Console()
         if self.mcp_enabled:
             with console.status("[cyan]Processing with MCP...[/cyan]"):
-                response = await self.core.run_with_mcp(query, self.use_react)
+                response = await self.core.run_with_mcp(query)
         else:
             response = await self.core.run_direct_claude(query)
         if response:
@@ -611,7 +587,6 @@ class BIMCLI:
         while True:
             try:
                 prompt_prefix = self.config.config["ui"]["prompt_prefix"]
-                # Use prompt_toolkit's HTML for color, avoid raw ANSI
                 prompt_html = HTML(f'<ansicyan><b>{prompt_prefix}&gt;</b></ansicyan> ')
                 user_input = await asyncio.to_thread(
                     self.session.prompt,
@@ -636,8 +611,6 @@ class BIMCLI:
                     print(f"\n⚙️  Configuration file: {self.config.config_file}")
                 elif user_input.lower().startswith("/mcp "):
                     await self.handle_mcp_command(user_input[1:])  # Remove leading '/'
-                elif user_input.lower().startswith("/agent "):
-                    self.handle_agent_command(user_input[1:])  # Remove leading '/'
                 # You can add more special symbol commands here
                 else:
                     # Regular query
