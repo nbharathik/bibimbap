@@ -265,6 +265,7 @@ class BIMCore:
         
         for tool in self.tools:
             console.print(f"  • [yellow]{tool.name}[/yellow]")
+        console.print()
     
     def convert_mcp_tools_to_anthropic(self, mcp_tools):
         """Convert MCP tools to Anthropic tool format"""
@@ -279,28 +280,31 @@ class BIMCore:
         return anthropic_tools
     
     async def run_direct_claude(self, query: str) -> str:
-        """Run query with direct Claude (no MCP)"""
+        """Run query with direct Claude (no MCP), with streaming support"""
+        from rich.live import Live
+        from rich.text import Text
         start_time = datetime.now()
         console = Console()
-        
+        response = ""
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                messages=[
-                    {"role": "user", "content": query}
-                ]
-            )
-            
-            response = message.content[0].text
-            
+            console.print("[cyan]Processing...[/cyan]")
+            # Streaming response from Claude
+            with Live(Text(""), console=console, refresh_per_second=8) as live:
+                stream = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    messages=[{"role": "user", "content": query}],
+                    stream=True
+                )
+                for event in stream:
+                    if hasattr(event, "delta") and hasattr(event.delta, "text"):
+                        response += event.delta.text
+                        live.update(Text(response))
             if self.config.config["ui"]["show_timing"]:
                 elapsed = (datetime.now() - start_time).total_seconds()
                 console.print(f"[magenta]Response time: {elapsed:.2f}s[/magenta]")
-            
             return response
-            
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             return f"Error: {e}"
