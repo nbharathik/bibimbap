@@ -52,6 +52,7 @@ class MCPServerConfig:
     url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
     env_vars: Optional[Dict[str, str]] = None
+    cwd: Optional[str] = None  # Add cwd for working directory support
     description: Optional[str] = None
 
 class BIMConfig:
@@ -272,6 +273,8 @@ class BIMCore:
                 }
                 if server.env_vars:
                     server_config["env_vars"] = server.env_vars
+                if server.cwd:
+                    server_config["cwd"] = server.cwd  # Add cwd if present
             elif server.transport == "streamable_http":
                 server_config = {
                     "url": server.url,
@@ -296,6 +299,8 @@ class BIMCore:
                     print(f"    Command: {cfg['command']} {' '.join(cfg.get('args', []))}")
                     if 'env_vars' in cfg:
                         print(f"    Env: {cfg['env_vars']}")
+                    if 'cwd' in cfg:
+                        print(f"    CWD: {cfg['cwd']}")
                 if 'url' in cfg:
                     print(f"    URL: {cfg['url']}")
                 if 'headers' in cfg:
