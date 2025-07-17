@@ -316,7 +316,7 @@ class BIMCore:
         from rich.markdown import Markdown
         start_time = datetime.now()
         console = Console()
-        full_response = ""  # Accumulate all text responses
+        full_response = ""  
         try:
             anthropic_tools = self.convert_mcp_tools_to_anthropic(self.tools)
             messages = [{"role": "user", "content": query}]
@@ -338,7 +338,6 @@ class BIMCore:
                             streamed_response += text
                             live.update(Text(streamed_response))
                 
-                # After the stream is finished, get the final message
                 final_message = stream.get_final_message()
 
                 # Extract any tool calls
@@ -356,7 +355,6 @@ class BIMCore:
                 # Add assistant's response to messages
                 messages.append({"role": "assistant", "content": final_message.content})
                 
-                # If no tool calls, we're done
                 if not tool_calls:
                     break
                 
@@ -372,7 +370,6 @@ class BIMCore:
                             "tool_use_id": tool_call.id,
                             "content": tool_result_content
                         })
-                        # Show tool result immediately (mimic Claude API/Console)
                         console.print()
                         console.print(Panel(Markdown(tool_result_content), title=f"[bold green]Tool: {tool_call.name}[/bold green]", border_style="green", padding=(1, 2)))
                     except Exception as e:
@@ -492,7 +489,6 @@ class BIMCLI:
         print(f"  Claude Model: {self.config.config['claude']['model']}")
         print(f"  MCP Enabled: {self.mcp_enabled}")
         print(f"  Tools Available: {len(self.core.tools)}")
-        # Show MCP server process status if possible
         if self.core.mcp_client and hasattr(self.core.mcp_client, 'get_server_status'):
             status = self.core.mcp_client.get_server_status()
             for name, stat in status.items():
@@ -623,12 +619,10 @@ class BIMCLI:
                 elif user_input.lower() == "/status":
                     self.show_status()
                 elif user_input.lower() == "/config":
-                    print(f"\n⚙️  Configuration file: {self.config.config_file}")
+                    print(f"\nConfiguration file: {self.config.config_file}")
                 elif user_input.lower().startswith("/mcp "):
-                    await self.handle_mcp_command(user_input[1:])  # Remove leading '/'
-                # You can add more special symbol commands here
+                    await self.handle_mcp_command(user_input[1:])  
                 else:
-                    # Regular query
                     await self.process_query(user_input)
             except KeyboardInterrupt:
                 print("\nFinishing session!")
@@ -643,7 +637,7 @@ async def main():
     args = parser.parse_args()
 
     if args.setup:
-        print("🔧 Setting up BIM-CLI...")
+        print("Setting up BIM-CLI...")
         config = BIMConfig(args.config)
         print(f"Configuration created: {config.config_file}")
         print("Edit the configuration file to customize your MCP servers.")
@@ -656,7 +650,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except RuntimeError as e:
-        # If already in an event loop (e.g. Jupyter), use alternative
         import nest_asyncio
         nest_asyncio.apply()
         loop = asyncio.get_event_loop()
