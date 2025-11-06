@@ -9,11 +9,7 @@ A command-line interface for working with Claude and Model Context Protocol (MCP
    ```bash
    pip install -r requirements.txt
    ```
-3. (Optional) Set up the project:
-   ```bash
-   python setup.py
-   ```
-4. Set your API key:
+3. Set your API key:
    ```bash
    export ANTHROPIC_API_KEY="your-anthropic-api-key"
    # For Windows PowerShell:
@@ -22,7 +18,7 @@ A command-line interface for working with Claude and Model Context Protocol (MCP
    or create a `.env` file in the `configs` directory with the line:
    ```ANTHROPIC_API_KEY=your-anthropic-api-key```. Check `configs/.env.example` for reference.
 
-5. Run the CLI:
+4. Run the CLI:
    ```bash
    python bim-cli.py
    ```
@@ -35,23 +31,23 @@ python bim-cli.py
 ```
 
 ### Main Commands
-- `help` - Show all available commands
-- `status` - Show current configuration and server status
-- `quit` or `exit` - Exit the CLI
-- `clear` - Clear the screen
-- `config` - Show config file location
+- `/help` - Show all available commands
+- `/status` - Show current configuration and server status
+- `/quit` or `/exit` - Exit the CLI
+- `/clear` - Clear the screen
+- `/config` - Show config file location
 
 ### MCP Server Commands
-- `mcp on` - Enable and connect to all enabled MCP servers
-- `mcp off` - Disconnect all MCP servers
-- `mcp status` - Show MCP server status (enabled, running, failed)
-- `mcp list` - List all MCP servers with their status
-- `mcp enable <server>` - Enable a specific server
-- `mcp disable <server>` - Disable a specific server
-- `mcp tools` - Show available tools
-- `mcp add-server <file>` - Add a new MCP server from a JSON file
-- `mcp remove-server <name>` - Remove an MCP server by name
-- `mcp add-servers-dir <dir_path>` - Add all MCP servers from JSON files in a directory
+- `/mcp on` - Enable and connect to all enabled MCP servers
+- `/mcp off` - Disconnect all MCP servers
+- `/mcp status` - Show MCP server status (enabled, running, failed)
+- `/mcp list` - List all MCP servers with their status
+- `/mcp enable <server>` - Enable a specific server
+- `/mcp disable <server>` - Disable a specific server
+- `/mcp tools` - Show available tools
+- `/mcp add-server <file>` - Add a new MCP server from a JSON file
+- `/mcp remove-server <name>` - Remove an MCP server by name
+- `/mcp add-servers-dir <dir_path>` - Add all MCP servers from JSON files in a directory
 
 ## Configuration
 
