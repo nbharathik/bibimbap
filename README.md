@@ -19,6 +19,9 @@ A command-line interface for working with Claude and Model Context Protocol (MCP
    # For Windows PowerShell:
    $env:ANTHROPIC_API_KEY="your-anthropic-api-key"
    ```
+   or create a `.env` file in the `configs` directory with the line:
+   ```ANTHROPIC_API_KEY=your-anthropic-api-key```. Check `configs/.env.example` for reference.
+
 5. Run the CLI:
    ```bash
    python bim-cli.py
@@ -69,14 +72,6 @@ All configuration is in `configs/config.json` in the project root. Example:
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
       "description": "File system access"
-    },
-    "math": {
-      "name": "math",
-      "enabled": true,
-      "transport": "stdio",
-      "command": "python",
-      "args": ["servers/math_server.py"],
-      "description": "Math operations"
     }
   },
   "ui": {
@@ -87,4 +82,3 @@ All configuration is in `configs/config.json` in the project root. Example:
   }
 }
 ```
-Copy `configs/.env.example` to `configs/.env` and fill in your API keys.
