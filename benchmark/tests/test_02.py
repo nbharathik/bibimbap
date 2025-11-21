@@ -1,0 +1,68 @@
+import ifcopenshell
+import ifcopenshell.geom
+import ifcopenshell.util.placement
+import ifcopenshell.util.shape
+
+
+def execute_test(ifc_file, edited_ifc_file, model_output):
+    """returns dict with key for every metric and value true/false"""
+    """ifc_file state at beginning: empty"""
+    """prompt: Create a wall with 1m height and 2m width and 50cm thickness"""
+
+    return_object = {
+        "objects_exist": False,
+        "right_location": False,
+        "right_dimensions": False,
+        "door_opening_exists": False,   # integrity check
+    }
+
+    ifc_edited = ifcopenshell.open(edited_ifc_file)
+
+    try:
+        wall = ifc_edited.by_type("IfcWall")[0]
+        wall_exists = True
+    except IndexError:
+        wall_exists = False
+
+
+    if ifc_edited.by_type("IfcDoor"):
+        door_exists = True
+    else:
+        door_exists = False
+
+
+
+    if wall_exists and door_exists:
+        return_object["objects_exist"] = True
+
+    print(return_object, wall_exists, door_exists)
+
+    if not wall_exists:
+        return return_object
+
+
+    if ifc_edited.by_type("IfcOpeningElement"):
+        return_object["door_opening_exists"] = True
+    else:
+        return_object["door_opening_exists"] = False
+
+    if wall_exists:
+        matrix = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
+        x, y, z = matrix[:,3][:3]
+
+        settings = ifcopenshell.geom.settings()
+        shape = ifcopenshell.geom.create_shape(settings, wall)
+        geom = shape.geometry
+        width = ifcopenshell.util.shape.get_x(geom)
+        height = ifcopenshell.util.shape.get_z(geom)
+        thickness = ifcopenshell.util.shape.get_y(geom)
+
+        if width == 2.0 and height == 1.0 and thickness == 0.5:
+            return_object["right_dimensions"] = True
+
+        if x == 0.0 and y == 0.0 and z == 0.0:
+            return_object["right_location"] = True
+
+
+
+    return return_object

@@ -1,0 +1,122 @@
+{
+  "0": {
+    "question_id": 0,
+    "session_id": "715513da-984b-462f-b0a3-712f3644d852",
+    "prompt": "Create a wall with 1m height and 2m width and 50cm thickness",
+    "model": "openai:gpt-4.1",
+    "ifc_file": "empty.ifc",
+    "model_output": "A wall has been created with the following specifications:\n\n- Height: 1 meter\n- Length (width): 2 meters\n- Thickness: 0.5 meters (50 cm)\n- Name: Wall 1x2m\n\nIf you need further modifications, materials, or placement adjustments, just let me know!",
+    "tool_calls": [
+      {
+        "name": "create_wall",
+        "args": {
+          "name": "Wall 1x2m",
+          "dimensions": {
+            "length": 2.0,
+            "height": 1.0,
+            "thickness": 0.5
+          }
+        },
+        "input_tokens": 23371,
+        "output_tokens": 40
+      }
+    ],
+    "metrics": {
+      "object_exists": true,
+      "right_location": true,
+      "right_dimensions": true
+    },
+    "input_tokens": 23599,
+    "output_tokens": 66,
+    "timestamp": "\"2025-11-21 12:24:09\""
+  },
+  "1": {
+    "question_id": 1,
+    "session_id": "0aa7e74f-5dc9-47c4-8ae5-44debdac2cec",
+    "prompt": "Create a wall with 1m height and 2m width and 50cm thickness and then add a door",
+    "model": "openai:gpt-4.1",
+    "ifc_file": "empty.ifc",
+    "model_output": "Your wall and door have been created:\n\n- Wall: 2 meters long, 1 meter high, and 0.5 meter (50 cm) thick.\n- Door: 0.9 meters wide, 1 meter high, added as a single swing left door with an opening in the wall, positioned 0.5 meters from the wall's start.\n\nIf you need to adjust the door\u2019s placement, size, or type, or want to add more details, let me know!",
+    "tool_calls": [
+      {
+        "name": "create_wall",
+        "args": {
+          "name": "Wall with Door",
+          "dimensions": {
+            "length": 2.0,
+            "height": 1.0,
+            "thickness": 0.5
+          }
+        },
+        "input_tokens": 23376,
+        "output_tokens": 37
+      },
+      {
+        "name": "create_door",
+        "args": {
+          "name": "Door in Wall",
+          "dimensions": {
+            "width": 0.9,
+            "height": 1.0
+          },
+          "operation_type": "SINGLE_SWING_LEFT",
+          "wall_guid": "2hOieHrIT5fuXbokKuxr89",
+          "create_opening": true,
+          "location": [
+            0.5,
+            0,
+            0
+          ]
+        },
+        "input_tokens": 23594,
+        "output_tokens": 74
+      }
+    ],
+    "metrics": {
+      "objects_exist": true,
+      "right_location": true,
+      "right_dimensions": true,
+      "door_opening_exists": false
+    },
+    "input_tokens": 23817,
+    "output_tokens": 101,
+    "timestamp": "\"2025-11-21 12:31:50\""
+  },
+  "2": {
+    "question_id": 2,
+    "session_id": "0aa7e74f-5dc9-47c4-8ae5-44debdac2cec",
+    "prompt": "Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.",
+    "model": "openai:gpt-4.1",
+    "ifc_file": "empty.ifc",
+    "model_output": "The wall has been created with the following specifications:\n\n- Height: 1 meter\n- Width (length): 2 meters\n- Thickness: 0.5 meter (50 cm)\n- Rotation: 90 degrees\n\nThe wall is named \"Rotated Wall\". If you need a screenshot, style, or further modifications, just let me know!",
+    "tool_calls": [
+      {
+        "name": "create_wall",
+        "args": {
+          "name": "Rotated Wall",
+          "dimensions": {
+            "length": 2.0,
+            "height": 1.0,
+            "thickness": 0.5
+          },
+          "rotation": [
+            0,
+            0,
+            90
+          ]
+        },
+        "input_tokens": 23379,
+        "output_tokens": 45
+      }
+    ],
+    "metrics": {
+      "object_exists": true,
+      "right_location": true,
+      "right_dimensions": true,
+      "right_angle": true
+    },
+    "input_tokens": 23606,
+    "output_tokens": 72,
+    "timestamp": "\"2025-11-21 12:32:15\""
+  }
+}
