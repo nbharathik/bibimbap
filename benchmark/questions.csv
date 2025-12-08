@@ -1,4 +1,6 @@
-question,test,ifc-file
-Create a wall with 1m height and 2m width and 50cm thickness,test_01,empty.ifc
-Create a wall with 1m height and 2m width and 50cm thickness and then add a door,test_02,empty.ifc
-Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.,test_03,empty.ifc
+question,test,ifc-file,structured-output
+Create a wall with 1m height and 2m width and 50cm thickness,test_01,empty.ifc,
+Create a wall with 1m height and 2m width and 50cm thickness and then add a door,test_02,empty.ifc,
+Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.,test_03,empty.ifc,
+"Retrieve the inner net wall area of the wall. Make sure, to subtract the area of the opening. The area is defined as the product of the length and the height of an object.",test_04,SimpleWall.ifc,output_01
+Retrieve the inner net wall area of the wall.,test_04,SimpleWall.ifc,output_01

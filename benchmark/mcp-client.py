@@ -8,6 +8,10 @@ from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 
+from langchain.agents.structured_output import ToolStrategy
+from langchain.agents.structured_output import ProviderStrategy
+
+
 from typing import List
 
 import pandas as pd
@@ -20,6 +24,7 @@ from datetime import datetime
 import shutil
 import uuid
 import tempfile
+from pprint import pprint
 
 load_dotenv()
 
@@ -35,6 +40,7 @@ model = init_chat_model(model_name)
 
 class State(TypedDict):
     prompt: str
+    structured_output: object
     model_output: str
     input_tokens: int
     output_tokens: int
@@ -54,14 +60,17 @@ async def main():
 
     async def call_model(state: State):
         prompt = state["prompt"]
-        agent = create_agent(model, mcp_tools)
+        structured_output = state["structured_output"]
+        if structured_output:
+            agent = create_agent(model, mcp_tools, response_format=ToolStrategy(structured_output))
+        else:
+            agent = create_agent(model, mcp_tools)
 
         chain_end = [event async for event in agent.astream_events({"messages": [{"role": "user", "content": prompt}]})][-1]
 
         model_output = ""
         input_tokens = output_tokens = 0
         tool_calls = []
-
         for message in chain_end["data"]["output"]["messages"]:
             if not message.response_metadata:
                 continue
@@ -75,6 +84,10 @@ async def main():
 
             if message.response_metadata["finish_reason"] == "stop":
                 model_output = message.content
+
+        structured_response = chain_end["data"]["output"]["structured_response"]
+        if structured_response:
+            model_output = structured_response
 
         return {
             "model_output": model_output,
@@ -107,6 +120,13 @@ async def main():
         test_path = "tests." + row["test"]
         ifc_path = "ifc/" + row["ifc-file"]
 
+        structured_output = "structured_outputs." + str(row["structured-output"])
+
+        if not pd.isna(row["structured-output"]):
+            output_object = importlib.import_module(structured_output).ModelOutput
+        else:
+            output_object = None
+
         tmp = tempfile.NamedTemporaryFile(suffix=".ifc", delete=False, mode="w+b")
         edited_ifc_path = tmp.name # TODO: use tempfile as input to the model and for the evaluation
         with open(ifc_path, "rb") as src:
@@ -114,15 +134,30 @@ async def main():
         tmp.close()
         # tempfile can be accessed by other processes now
 
+
+
         # TODO: loop over number of samples
+
+
+        model_args = {
+                "prompt": prompt,
+                "structured_output": output_object
+        }
+        print(model_args)
         result_state = await graph.ainvoke(
-            {"prompt": prompt}
+            model_args
         )
         # result state contains prompt, model_output, tool_calls
 
+        if output_object:
+            model_output = result_state["model_output"].__dict__
+        else:
+            model_output = result_state["model_output"]
+
         test = importlib.import_module(test_path)
         # now you can call test.execute_test()
-        metrics = test.execute_test(ifc_path, ifc_path, result_state["model_output"]) # TODO: change that to edited_ifc as soon as it works (without blender)
+        metrics = test.execute_test(ifc_path, ifc_path, model_output) # TODO: change that to edited_ifc as soon as it works (without blender)
+
 
         cache_object = {
             "question_id": question_id,
@@ -130,7 +165,7 @@ async def main():
             "prompt": result_state["prompt"],
             "model": model_name,
             "ifc_file": row["ifc-file"],
-            "model_output": result_state["model_output"],
+            "model_output": model_output,
             "tool_calls": result_state["tool_calls"],
             "metrics": metrics,
             "input_tokens": result_state["input_tokens"],
@@ -147,7 +182,7 @@ async def main():
 
         os.remove(edited_ifc_path)
 
-        input("Please delete the generated objects from the open Blender file so that the next question can be processed. Press enter to continue.")
+        input("Please prepare open Blender file so that the next question can be processed. Press enter to continue.")
 
 
 # Run the async main function

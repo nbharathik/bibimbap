@@ -4,3 +4,4 @@ langchain~=1.0.3
 langgraph~=1.0.2
 dotenv~=0.9.9
 python-dotenv~=1.2.1
+pydantic~=2.12.3
