@@ -105,12 +105,12 @@ async def main():
 
     # load cache file
     try:
-        cache = json.load(open(f"cache_{model_name.split(":")[-1]}.json"))
+        cache = json.load(open(f"results/cache_{model_name.split(":")[-1]}.json"))
     except FileNotFoundError:
         cache = {}
 
     # create directory for storing edited ifc files
-    edited_ifc_directory = f"edited_ifc_{model_name.split(':')[-1]}"
+    edited_ifc_directory = f"results/edited_ifc_{model_name.split(':')[-1]}"
     if not os.path.exists(edited_ifc_directory):
         os.mkdir(edited_ifc_directory)
 
@@ -210,7 +210,7 @@ async def main():
         # store results in the cache
         cache[question_id] = cache_object
 
-        json.dump(cache, open(f"cache_{model_name.split(":")[-1]}.json", "w"))
+        json.dump(cache, open(f"results/cache_{model_name.split(":")[-1]}.json", "w"))
 
 
         # input("Please prepare open Blender file so that the next question can be processed. Press enter to continue.")
