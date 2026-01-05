@@ -4,3 +4,9 @@ Create a wall with 1m height and 2m width and 50cm thickness and then add a door
 Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.,test_03,empty.ifc,
 "Retrieve the inner net wall area of the wall. Make sure, to subtract the area of the opening. The area is defined as the product of the length and the height of an object.",test_04,SimpleWall.ifc,output_01
 Retrieve the inner net wall area of the wall.,test_04,SimpleWall.ifc,output_01
+Retrieve the number of windows of the room on the left side of the entry door. (Standing outside of the building looking towards the door.),test_05,FZK-Haus.ifc,output_02
+Create an opening with the size of 1 by 1 meters with its bottom in the center of the wall with id 508,test_06,basic_tasks.ifc,
+"Create 6 columns with 20 by 20 centimeters and a center to center distance of 2 meters beginning in (-20, 0)",dummy_test,basic_tasks.ifc,
+Rotate the wall with guid 22hyxvAPr65PFt9WZfHSP3 / step id 879 by +90 degree around the z axis.,dummy_test,basic_tasks.ifc,
+Move the door in the wall with guid 11kJIqz$n2Jf_DfJV1SDYu by 1 meter in the direction of x.,test_09,basic_tasks.ifc,
+Create two walls. Make them the same size as the one already there.,dummy_test,empty.ifc,
