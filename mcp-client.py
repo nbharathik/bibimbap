@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.chat_models import init_chat_model
@@ -14,6 +15,12 @@ import importlib
 from typing import TypedDict
 from datetime import datetime
 import shutil
+
+try:
+    # Universal token counting callback (aggregates across multi-step agent runs).
+    from langchain_core.callbacks import get_usage_metadata_callback
+except Exception:  # pragma: no cover
+    get_usage_metadata_callback = None
 
 class State(TypedDict):
     prompt: str
@@ -46,7 +53,7 @@ def model_suffix(model_name: str) -> str:
 
 # TODO: catch errors while calling tools so that the benchmark does not end
 async def main():
-    default_config = Path(__file__).with_name("benchmark.config.json")
+    default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.json"
     parser = argparse.ArgumentParser(description="Run the IFC MCP benchmark.")
     parser.add_argument(
         "--config",
@@ -55,13 +62,17 @@ async def main():
     )
     args = parser.parse_args()
 
+    repo_root = Path(__file__).resolve().parent
+
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = (Path.cwd() / config_path).resolve()
     config = load_config(config_path)
-    base_dir = config_path.parent
 
-    env_path = base_dir / ".env"
+    base_dir = repo_root
+    config_dir = config_path.parent
+
+    env_path = config_dir / ".env"
     if env_path.exists():
         load_dotenv(dotenv_path=env_path)
     else:
@@ -73,6 +84,24 @@ async def main():
     num_samples = config["num_samples"]
     model_name = config["model_name"]
     model = init_chat_model(model_name)
+
+    # Best-effort: ensure token usage is included in streaming responses.
+    # Some providers (notably OpenAI) omit usage in streaming unless explicitly enabled.
+    try:
+        if hasattr(model, "stream_options"):
+            existing = getattr(model, "stream_options") or {}
+            if isinstance(existing, dict):
+                model.stream_options = {**existing, "include_usage": True}
+        if hasattr(model, "model_kwargs"):
+            mk = getattr(model, "model_kwargs") or {}
+            if isinstance(mk, dict):
+                so = mk.get("stream_options") or {}
+                if isinstance(so, dict):
+                    mk["stream_options"] = {**so, "include_usage": True}
+                    model.model_kwargs = mk
+    except Exception:
+        # If the underlying model does not support this, fall back silently.
+        pass
     system_prompt = config["system_prompt"]
 
     paths_config = config["paths"]
@@ -167,52 +196,156 @@ async def main():
         else:
             user_content = f"{prompt}\n(The IFC file is already loaded in Blender.)"
 
-        chain = [
-            event
-            async for event in agent.astream_events(
-                {
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ]
-                }
-            )
-        ]
+        # Collect events. If available, use LangChain's aggregated usage callback,
+        # which counts tokens across *all* underlying model calls (tool loops included).
+        usage_cb_cm = None
+        usage_cb = None
+        if get_usage_metadata_callback is not None:
+            try:
+                usage_cb_cm = get_usage_metadata_callback()
+                usage_cb = usage_cb_cm.__enter__()
+            except Exception:
+                usage_cb_cm = None
+                usage_cb = None
+
+        try:
+            chain = [
+                event
+                async for event in agent.astream_events(
+                    {
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ]
+                    },
+                    config={"callbacks": [usage_cb]} if usage_cb is not None else None,
+                )
+            ]
+        finally:
+            if usage_cb_cm is not None:
+                usage_cb_cm.__exit__(None, None, None)
 
         # retrieve outputs containing model output, tool calls and token uses
         chain_end = chain[-1]
 
+        def _extract_token_usage_from_message(msg) -> tuple[int, int]:
+            """Return (input_tokens, output_tokens) best-effort for a LangChain message."""
+            usage = getattr(msg, "usage_metadata", None) or {}
+            if isinstance(usage, Mapping) and usage:
+                in_tok = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+                out_tok = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+                return int(in_tok or 0), int(out_tok or 0)
+
+            rm = getattr(msg, "response_metadata", None) or {}
+            if isinstance(rm, Mapping) and rm:
+                # Some integrations put usage directly on response_metadata.
+                if any(
+                    k in rm
+                    for k in (
+                        "input_tokens",
+                        "prompt_tokens",
+                        "output_tokens",
+                        "completion_tokens",
+                    )
+                ):
+                    in_tok = rm.get("input_tokens") or rm.get("prompt_tokens") or 0
+                    out_tok = rm.get("output_tokens") or rm.get("completion_tokens") or 0
+                    return int(in_tok or 0), int(out_tok or 0)
+
+                token_usage = rm.get("token_usage") or rm.get("usage") or {}
+                if isinstance(token_usage, Mapping) and token_usage:
+                    in_tok = token_usage.get("input_tokens") or token_usage.get("prompt_tokens") or 0
+                    out_tok = token_usage.get("output_tokens") or token_usage.get("completion_tokens") or 0
+                    return int(in_tok or 0), int(out_tok or 0)
+
+            return 0, 0
+
+        def _aggregate_token_usage_from_callback(cb) -> tuple[int, int] | None:
+            """Return (input_tokens, output_tokens) aggregated across agent run, or None."""
+            if cb is None or not getattr(cb, "usage_metadata", None):
+                return None
+            try:
+                cb_in = cb_out = 0
+                for v in cb.usage_metadata.values():
+                    if not isinstance(v, Mapping):
+                        continue
+                    cb_in += int(v.get("input_tokens") or v.get("prompt_tokens") or 0)
+                    cb_out += int(v.get("output_tokens") or v.get("completion_tokens") or 0)
+                return cb_in, cb_out
+            except Exception:
+                return None
+
+        def _parse_messages_for_output_and_tool_calls(msgs) -> tuple[str, list[dict], int, int]:
+            """Return (model_output, tool_call_iterations, parsed_in, parsed_out)."""
+            model_out = ""
+            parsed_in = parsed_out = 0
+            iterations: list[dict] = []
+
+            for message in msgs or []:
+                msg_input_tokens, msg_output_tokens = _extract_token_usage_from_message(message)
+                parsed_in += msg_input_tokens
+                parsed_out += msg_output_tokens
+
+                finish_reason = (
+                    message.response_metadata.get("finish_reason")
+                    if getattr(message, "response_metadata", None)
+                    else None
+                )
+
+                if finish_reason == "tool_calls":
+                    tool_calls = []
+                    for tool_call in getattr(message, "tool_calls", []) or []:
+                        name = (
+                            tool_call.get("name")
+                            if isinstance(tool_call, dict)
+                            else getattr(tool_call, "name", None)
+                        )
+                        args = (
+                            tool_call.get("args")
+                            if isinstance(tool_call, dict)
+                            else getattr(tool_call, "args", None)
+                        )
+                        if name and name != "ModelOutput":
+                            tool_calls.append({"name": name, "args": args})
+                    iterations.append(
+                        {
+                            "tool_calls": tool_calls,
+                            "input_tokens": msg_input_tokens,
+                            "output_tokens": msg_output_tokens,
+                        }
+                    )
+
+                if finish_reason == "stop":
+                    model_out = (
+                        message.content
+                        if getattr(message, "content", None) is not None
+                        else model_out
+                    )
+
+            return model_out, iterations, parsed_in, parsed_out
+
         model_output = ""
         input_tokens = output_tokens = 0
         tool_call_iterations = []
+
         messages = chain_end.get("data", {}).get("output", {}).get("messages", [])
-        for message in messages:
-            if not getattr(message, "response_metadata", None):
-                continue
-
-            tokens = getattr(message, "usage_metadata", None) or {}
-            input_tokens = int(tokens.get("input_tokens", 0))
-            output_tokens = int(tokens.get("output_tokens", 0))
-
-            finish_reason = message.response_metadata.get("finish_reason") if message.response_metadata else None
-
-            if finish_reason == "tool_calls":
-                tool_calls = []
-                for tool_call in getattr(message, "tool_calls", []) or []:
-                    name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name", None)
-                    args = tool_call.get("args") if isinstance(tool_call, dict) else getattr(tool_call, "args", None)
-                    if name and name != "ModelOutput":
-                        tool_calls.append({"name": name, "args": args})
-                tool_call_iterations.append(
-                    {"tool_calls": tool_calls, "input_tokens": input_tokens, "output_tokens": output_tokens}
-                )
-
-            if finish_reason == "stop":
-                model_output = message.content if getattr(message, "content", None) is not None else model_output
-
+        (
+            model_output,
+            tool_call_iterations,
+            parsed_input_tokens,
+            parsed_output_tokens,
+        ) = _parse_messages_for_output_and_tool_calls(messages)
 
         if "structured_response" in chain_end["data"]["output"].keys():
             model_output = chain_end["data"]["output"]["structured_response"]
+
+        # Prefer callback totals if available (covers multi-step agent runs reliably).
+        cb_totals = _aggregate_token_usage_from_callback(usage_cb)
+        if cb_totals is not None:
+            input_tokens, output_tokens = cb_totals
+        else:
+            input_tokens = parsed_input_tokens
+            output_tokens = parsed_output_tokens
 
         return {
             "model_output": model_output,

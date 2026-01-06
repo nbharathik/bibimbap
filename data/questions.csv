@@ -1,5 +1,4 @@
 question,test,ifc-file,structured-output
-Retrieve the number of windows of the room on the left side of the entry door. (Standing outside of the building looking towards the door.),test_05,FZK-Haus.ifc,output_02
 Create a wall with 1m height and 2m width and 50cm thickness,test_01,empty.ifc,
 Create a wall with 1m height and 2m width and 50cm thickness and then add a door,test_02,empty.ifc,
 Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.,test_03,empty.ifc,
