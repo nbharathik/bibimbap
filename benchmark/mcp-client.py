@@ -139,7 +139,6 @@ async def main():
         prompt = row["question"]
         test_path = "tests." + row["test"]
         ifc_path = "ifc/" + row["ifc-file"]
-        ifc_path = os.path.abspath(ifc_path)
 
         structured_output = "structured_outputs." + str(row["structured-output"])
 
@@ -166,7 +165,7 @@ async def main():
             model_args = {
                 "prompt": prompt,
                 "structured_output": output_object,
-                "ifc_file_path": edited_ifc_path,
+                "ifc_file_path": os.path.abspath(edited_ifc_path),
             }
 
             # invoke LLM
@@ -211,7 +210,6 @@ async def main():
         cache[question_id] = cache_object
 
         json.dump(cache, open(f"results/cache_{model_name.split(":")[-1]}.json", "w"))
-
 
         # input("Please prepare open Blender file so that the next question can be processed. Press enter to continue.")
         # for manually opening the right ifc file in blender
