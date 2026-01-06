@@ -41,7 +41,7 @@ async def main():
     # connect to MCP server and load tools
     client = MultiServerMCPClient(
         {
-            "blender": {
+            "mcp-server": {
                 "url": "http://127.0.0.1:8000/mcp",
                 "transport": "streamable_http",
             }
@@ -85,8 +85,9 @@ async def main():
                 for tool_call in message.tool_calls:
                     if tool_call["name"] != "ModelOutput":
                         tool_calls.append({"name": tool_call["name"], "args": tool_call["args"]}) #
-                tool_call_iterations.append(
-                    {"tool_calls": tool_calls, "input_tokens": input_tokens, "output_tokens": output_tokens})
+                if tool_calls:
+                    tool_call_iterations.append(
+                        {"tool_calls": tool_calls, "input_tokens": input_tokens, "output_tokens": output_tokens})
 
             if message.response_metadata["finish_reason"] == "stop":
                 model_output = message.content
@@ -137,6 +138,11 @@ async def main():
 
         # read the prompt, test, ifc file path, and structured output from the csv file
         prompt = row["question"]
+        # empty row in csv
+        if pd.isna(prompt):
+            print("Empty prompt. Skipping.")
+            continue
+
         test_path = "tests." + row["test"]
         ifc_path = "ifc/" + row["ifc-file"]
 
@@ -148,18 +154,24 @@ async def main():
         else:
             output_object = None
 
-        # creating subdirectory for storing edited ifc files per question
-        edited_question_directory = f"{edited_ifc_directory}/{question_id}"
-        if not os.path.exists(edited_question_directory):
-            os.mkdir(edited_question_directory)
+        # get crud category
+        crud = row["CRUD"]
+        edited_ifc_path = ifc_path
+
+        if crud != "retrieve":
+            # creating subdirectory for storing edited ifc files per question, not needed for retrieval questions
+            edited_question_directory = f"{edited_ifc_directory}/{question_id}"
+            if not os.path.exists(edited_question_directory):
+                os.mkdir(edited_question_directory)
 
         # iterate over sample size and store results for every sample
         sample_results = []
         for sample in range(num_samples):
 
-            # create the ifc file that will be edited. Create a new one per sample.
-            edited_ifc_path = f"{edited_question_directory}/{row["ifc-file"].split(".ifc")[0]}_{sample}.ifc"
-            shutil.copyfile(ifc_path, edited_ifc_path)
+            if crud != "retrieve":
+                # create the ifc file that will be edited. Create a new one per sample. Not needed for retrieval questions
+                edited_ifc_path = f"{edited_question_directory}/{row["ifc-file"].split(".ifc")[0]}_{sample}.ifc"
+                shutil.copyfile(ifc_path, edited_ifc_path)
 
             # set the arguments for the LLM
             model_args = {
@@ -211,8 +223,6 @@ async def main():
 
         json.dump(cache, open(f"results/cache_{model_name.split(":")[-1]}.json", "w"))
 
-        # input("Please prepare open Blender file so that the next question can be processed. Press enter to continue.")
-        # for manually opening the right ifc file in blender
 
 
 if __name__ == "__main__":

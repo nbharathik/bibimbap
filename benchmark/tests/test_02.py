@@ -3,66 +3,51 @@ import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.shape
 
-
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """returns dict with key for every metric and value true/false"""
-    """ifc_file state at beginning: empty"""
-    """prompt: Create a wall with 1m height and 2m width and 50cm thickness"""
-
-    return_object = {
-        "objects_exist": False,
-        "right_location": False,
-        "right_dimensions": False,
-        "door_opening_exists": False,   # integrity check
+    """Prompt: Create a slab with dimensions of 10 by 5 meters and the width of 20 centimeters with its bottom and center in (-30, 0)."""
+    metrics = {
+        "object_exists": False, # slab was created
+        "right_location": False, # slab has its center in (-30, 0)
+        "right_dimensions": False # slab has size 10x5x0.2
     }
 
+    ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    try:
-        wall = ifc_edited.by_type("IfcWall")[0]
-        wall_exists = True
-    except IndexError:
-        wall_exists = False
+    # check if there is a new slab
+    original_slab_guids = set(slab.GlobalId for slab in ifc_original.by_type("IfcSlab"))
+    edited_slab_guids = set(slab.GlobalId for slab in ifc_edited.by_type("IfcSlab"))
+
+    new_slab_ids = list(edited_slab_guids - original_slab_guids)
+    if len(new_slab_ids) == 0:
+        return metrics
+    metrics["object_exists"] = True
+    slab = ifc_edited.by_guid(new_slab_ids[0])
+
+    # get slab geometry information
+    settings = ifcopenshell.geom.settings()
+    shape = ifcopenshell.geom.create_shape(settings, slab)
+    geom = shape.geometry
+    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
+    x_min_slab = min(vertices[:, 0])
+    x_max_slab = max(vertices[:, 0])
+    y_min_slab = min(vertices[:, 1])
+    y_max_slab = max(vertices[:, 1])
+    z_min_slab = min(vertices[:, 2])
+    z_max_slab = max(vertices[:, 2])
+
+    width_slab = ifcopenshell.util.shape.get_x(geom)
+    height_slab = ifcopenshell.util.shape.get_z(geom)
+    thickness_slab = ifcopenshell.util.shape.get_y(geom)
 
 
-    if ifc_edited.by_type("IfcDoor"):
-        door_exists = True
-    else:
-        door_exists = False
+    if ((width_slab == 10.0 and thickness_slab == 5.0) or (width_slab == 5.0 and thickness_slab == 10.0)) and (height_slab == 0.2):
+        metrics["right_dimensions"] = True
 
 
+    if x_min_slab + width_slab/2 == -30.0 and y_min_slab + thickness_slab/2 == 0.0:
+        metrics["right_location"] = True
 
-    if wall_exists and door_exists:
-        return_object["objects_exist"] = True
+    return metrics
 
-    print(return_object, wall_exists, door_exists)
-
-    if not wall_exists:
-        return return_object
-
-
-    if ifc_edited.by_type("IfcOpeningElement"):
-        return_object["door_opening_exists"] = True
-    else:
-        return_object["door_opening_exists"] = False
-
-    if wall_exists:
-        matrix = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
-        x, y, z = matrix[:,3][:3]
-
-        settings = ifcopenshell.geom.settings()
-        shape = ifcopenshell.geom.create_shape(settings, wall)
-        geom = shape.geometry
-        width = ifcopenshell.util.shape.get_x(geom)
-        height = ifcopenshell.util.shape.get_z(geom)
-        thickness = ifcopenshell.util.shape.get_y(geom)
-
-        if width == 2.0 and height == 1.0 and thickness == 0.5:
-            return_object["right_dimensions"] = True
-
-        if x == 0.0 and y == 0.0 and z == 0.0:
-            return_object["right_location"] = True
-
-
-
-    return return_object
+#execute_test("../ifc/basic_tasks.ifc", "../results/edited_ifc_gpt-4.1/15/basic_tasks_0.ifc", {})
