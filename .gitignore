@@ -1,2 +1,10 @@
 configs/config.json
 configs/.env
+.env
+.venv
+venv/
+__pycache__/
+bin/
+results/
+*.pyc
+.vscode/

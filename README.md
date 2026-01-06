@@ -1,80 +1,35 @@
-# BIM-CLI: Connect BIM tools to LLMs
+# BIM Benchmark
 
-A command-line interface for working with Claude and Model Context Protocol (MCP) servers.
+Run an LLM + MCP benchmark over IFC tasks.
 
 ## Quick Start
 
-1. Clone or download the project
-2. Install dependencies:
+1. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Set your API key:
+2. Set API keys in `.env` (for example: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+3. Review `benchmark.config.json` for model, MCP server, and path settings.
+4. Run the benchmark:
    ```bash
-   export ANTHROPIC_API_KEY="your-anthropic-api-key"
-   # For Windows PowerShell:
-   $env:ANTHROPIC_API_KEY="your-anthropic-api-key"
+   python mcp-client.py
    ```
-   or create a `.env` file in the `configs` directory with the line:
-   ```ANTHROPIC_API_KEY=your-anthropic-api-key```. Check `configs/.env.example` for reference.
-
-4. Run the CLI:
+   Or provide a custom config:
    ```bash
-   python bim-cli.py
+   python mcp-client.py --config path\to\benchmark.config.json
    ```
 
-## Basic Usage
+## Results & Caching
 
-Start the CLI:
-```bash
-python bim-cli.py
-```
+- **Results Folder**: A new directory `results/run_YYYY-MM-DD_HH-MM-SS/` is created for each run.
+  - Contains `cache_<model>.json` (the results).
+  - Contains `edited_ifc/` (saved models).
+  - Contains `config.json` (snapshot of configuration used).
+- **Caching**: 
+  - To use previous results (avoid re-running successful queries), set `"cache_source": "path/to/old/cache.json"` in `benchmark.config.json`.
+  - To force a fresh run, set `"cache_source": null`.
 
-### Main Commands
-- `/help` - Show all available commands
-- `/status` - Show current configuration and server status
-- `/quit` or `/exit` - Exit the CLI
-- `/clear` - Clear the screen
-- `/config` - Show config file location
+## Git Ignore
 
-### MCP Server Commands
-- `/mcp on` - Enable and connect to all enabled MCP servers
-- `/mcp off` - Disconnect all MCP servers
-- `/mcp status` - Show MCP server status (enabled, running, failed)
-- `/mcp list` - List all MCP servers with their status
-- `/mcp enable <server>` - Enable a specific server
-- `/mcp disable <server>` - Disable a specific server
-- `/mcp tools` - Show available tools
-- `/mcp add-server <file>` - Add a new MCP server from a JSON file
-- `/mcp remove-server <name>` - Remove an MCP server by name
-- `/mcp add-servers-dir <dir_path>` - Add all MCP servers from JSON files in a directory
-
-## Configuration
-
-All configuration is in `configs/config.json` in the project root. Example:
-```json
-{
-  "version": "1.0.0",
-  "claude": {
-    "model": "claude-3-5-sonnet-20241022",
-    "temperature": 0.1,
-    "max_tokens": 4096
-  },
-  "mcp_servers": {
-    "filesystem": {
-      "name": "filesystem",
-      "enabled": true,
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
-      "description": "File system access"
-    }
-  },
-  "ui": {
-    "show_tools": true,
-    "show_timing": true,
-    "colored_output": true,
-    "prompt_prefix": "BIM-CLI"
-  }
-}
-```
+- The `results/` folder is ignored by default to avoid bloating the repository.
+- `venv/` and `.env` are also ignored.
