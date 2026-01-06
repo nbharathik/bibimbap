@@ -63,7 +63,7 @@ async def main():
             agent = create_agent(model, mcp_tools)
 
         # invoke agents
-        chain = [event async for event in agent.astream_events({"messages": [{"role": "system", "content": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation."},
+        chain = [event async for event in agent.astream_events({"messages": [{"role": "system", "content": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation. You must always load the ifc file first."},
                                                                              {"role": "user", "content": f"{prompt}\nThe ifc file path is {ifc_file_path}."}]})]
 
         # retrieve outputs containing model output, tool calls and token uses
