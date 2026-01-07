@@ -1,26 +1,13 @@
-import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.placement
-import ifcopenshell.util.shape
-
-
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """returns dict with key for every metric and value true/false"""
-
-    return_object = {
-        "objects_exist": False,
-        "right_location": False,
-        "right_dimensions": False
+    """Prompt: Provide the area of the room with id 2UsXAbj6n0fwEWqdkVuHyo."""
+    metrics = {
+        "right_answer": False # right area provided
     }
 
-    ifc_edited = ifcopenshell.open(edited_ifc_file)
+    area = 150.0
+    predicted_area = model_output["area"]
 
-    wall = ifc_edited.by_id(508)
+    metrics["right_answer"] = area == predicted_area
 
-    openings = ifc_edited.by_type("IfcOpeningElement")
-    for opening in openings:
-        print(opening)
+    return metrics
 
-
-
-    return return_object

@@ -400,6 +400,9 @@ async def main():
 
         # read the prompt, test, ifc file path, and structured output from the csv file
         prompt = row["question"]
+        if pd.isna(prompt):
+            print("Empty prompt. Skipping.")
+            continue
         test_path = f"{tests_module}.{row['test']}"
         ifc_path = ifc_dir / row["ifc-file"]
 
@@ -410,10 +413,14 @@ async def main():
         else:
             output_object = None
 
+        # crud = row["CRUD"]
+        
+        # if crud != "retrieve":
+        
         # creating subdirectory for storing edited ifc files per question
         edited_question_directory = edited_ifc_directory / str(question_id)
         edited_question_directory.mkdir(parents=True, exist_ok=True)
-
+     
         # iterate over sample size and store results for every sample
         sample_results = []
         for sample in range(num_samples):
@@ -460,7 +467,11 @@ async def main():
             # load and execute test
             test = importlib.import_module(test_path)
             # now you can call test.execute_test() and retrieve the evaluation metrics
-            metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
+            try:
+                metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
+            except Exception as exc:
+                print(f"Error executing test for question {question_id}, sample {sample}: {exc}")
+                metrics = {}
 
             # store results for a sample
             sample_cache_object = {
@@ -468,7 +479,7 @@ async def main():
                 "model_output": model_output,
                 "tool_call_iterations": result_state["tool_call_iterations"],
                 "metrics": metrics, # dictionary of metrics
-                "score": sum(metrics.values())/len(metrics), # score = fulfilled metrics / all metrics
+                "score": sum(metrics.values())/len(metrics) if metrics else 0, # score = fulfilled metrics / all metrics
                 "input_tokens": result_state["input_tokens"],
                 "output_tokens": result_state["output_tokens"]
             }

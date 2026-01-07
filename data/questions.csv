@@ -1,12 +1,12 @@
-question,test,ifc-file,structured-output
-Create a wall with 1m height and 2m width and 50cm thickness,test_01,empty.ifc,
-Create a wall with 1m height and 2m width and 50cm thickness and then add a door,test_02,empty.ifc,
-Create a wall with 1m height and 2m width and 50cm thickness. Rotate it by 90 degree.,test_03,empty.ifc,
-"Retrieve the inner net wall area of the wall. Make sure, to subtract the area of the opening. The area is defined as the product of the length and the height of an object.",test_04,SimpleWall.ifc,output_01
-Retrieve the inner net wall area of the wall.,test_04,SimpleWall.ifc,output_01
-Retrieve the number of windows of the room on the left side of the entry door. (Standing outside of the building looking towards the door.),test_05,FZK-Haus.ifc,output_02
-Create an opening with the size of 1 by 1 meters with its bottom in the center of the wall with id 508,test_06,basic_tasks.ifc,
-"Create 6 columns with 20 by 20 centimeters and a center to center distance of 2 meters beginning in (-20, 0)",dummy_test,basic_tasks.ifc,
-Rotate the wall with guid 22hyxvAPr65PFt9WZfHSP3 / step id 879 by +90 degree around the z axis.,dummy_test,basic_tasks.ifc,
-Move the door in the wall with guid 11kJIqz$n2Jf_DfJV1SDYu by 1 meter in the direction of x.,test_09,basic_tasks.ifc,
-Create two walls. Make them the same size as the one already there.,dummy_test,empty.ifc,
+question,test,ifc-file,structured-output,CRUD
+Create a door with the size of 2 by 1 meters in the wall with id 2UsXAbj6n0fwEWqdkVuHvf.,test_01,basic_tasks.ifc,,create
+"Create a slab with dimensions of 10 by 5 meters and the width of 20 centimeters with its bottom and center in (-30, 0).",test_02,basic_tasks.ifc,,create
+Add an opening of size 5 by 5 meters to the center of the slab with id 11kJIqz$n2Jf_DfJV1SCVP.,test_03,basic_tasks.ifc,,create
+"Insert a column with the height of 3m in (12, 8).",test_04,basic_tasks.ifc,,create
+"Add a wall with a length of 15m beginning in (0, -10).",test_05,basic_tasks.ifc,,create
+,,,,
+Provide the area of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_06,basic_tasks.ifc,output_06,retrieve
+Take off the length of the wall with id 22hyxvAPr65PFt9WZfHSKC.,test_07,basic_tasks.ifc,output_07,retrieve
+Provide the volume of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_08,basic_tasks.ifc,output_08,retrieve
+"Provide the distance, center to center, of the columns with ids 22hyxvAPr65PFt9WZfHSMr and 22hyxvAPr65PFt9WZfHSMu.",test_09,basic_tasks.ifc,output_09,retrieve
+Provide the global id of the wall that has a length of 5m.,test_10,basic_tasks.ifc,output_10,retrieve
