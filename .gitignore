@@ -1,5 +1,5 @@
-configs/config.json
-configs/.env
+**/benchmark.config.json
+**/.env
 .env
 .venv
 venv/
