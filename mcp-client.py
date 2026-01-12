@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -15,6 +16,7 @@ import importlib
 from typing import TypedDict
 from datetime import datetime
 import shutil
+import requests
 
 try:
     # Universal token counting callback (aggregates across multi-step agent runs).
@@ -51,6 +53,75 @@ def resolve_path(base_dir: Path, path_value: str) -> Path:
 def model_suffix(model_name: str) -> str:
     return model_name.split(":")[-1]
 
+def _set_if_missing_env(key: str, value: str | None) -> None:
+    if not value:
+        return
+    if not os.getenv(key):
+        os.environ[key] = value
+
+def _list_openai_compatible_models(*, base_url_v1: str, api_key: str) -> list[str]:
+    url = base_url_v1.rstrip("/") + "/models"
+    r = requests.get(url, headers={"Authorization": f"Bearer {api_key}"}, timeout=30)
+    r.raise_for_status()
+    data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    models = [
+        m.get("id")
+        for m in (data.get("data") or [])
+        if isinstance(m, dict) and m.get("id")
+    ]
+    return [str(m) for m in models]
+
+def _resolve_blablador_model_name(config: dict, model_name: str) -> tuple[str, dict]:
+    """Translate 'blablador:...' into an OpenAI-compatible model and configure env vars.
+
+    Supported:
+    - model_name: 'blablador:<model-id>' (direct)
+    - model_name: 'blablador:<index>' (when blablador.discover_models=true)
+    """
+    bl = config.get("blablador") or {}
+
+    api_key_env = str(bl.get("api_key_env") or "BLABLADOR_API_KEY")
+    api_key = os.getenv(api_key_env)
+    if not api_key:
+        raise SystemExit(
+            f"Missing env var {api_key_env}. Set it (e.g. in configs/.env) before running."
+        )
+
+    base_url = str(bl.get("base_url") or "").strip()
+    if base_url:
+        # Be tolerant: LangChain/OpenAI wrappers may read either of these.
+        _set_if_missing_env("OPENAI_BASE_URL", base_url)
+        _set_if_missing_env("OPENAI_API_BASE", base_url)
+
+    _set_if_missing_env("OPENAI_API_KEY", api_key)
+
+    llm_kwargs: dict = {}
+    if bl.get("temperature") is not None:
+        llm_kwargs["temperature"] = bl.get("temperature")
+
+    spec = model_name.split(":", 1)[1].strip()
+    discover_models = bool(bl.get("discover_models", False))
+
+    if discover_models and spec.isdigit():
+        base_url_v1 = os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or ""
+        if not base_url_v1:
+            raise SystemExit(
+                "blablador.discover_models=true requires blablador.base_url to be set (must include /v1)."
+            )
+        models = _list_openai_compatible_models(base_url_v1=base_url_v1, api_key=api_key)
+        if not models:
+            raise SystemExit(f"No models returned from {base_url_v1.rstrip('/') + '/models'}")
+        idx = int(spec)
+        if idx < 0 or idx >= len(models):
+            raise SystemExit(
+                f"Model index {idx} out of range. Server returned {len(models)} models."
+            )
+        resolved_id = models[idx]
+    else:
+        resolved_id = spec
+
+    return f"openai:{resolved_id}", llm_kwargs
+
 # TODO: catch errors while calling tools so that the benchmark does not end
 async def main():
     default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.json"
@@ -83,7 +154,11 @@ async def main():
 
     num_samples = config["num_samples"]
     model_name = config["model_name"]
-    model = init_chat_model(model_name)
+    llm_kwargs: dict = {}
+    if isinstance(model_name, str) and model_name.startswith("blablador:"):
+        model_name, llm_kwargs = _resolve_blablador_model_name(config, model_name)
+
+    model = init_chat_model(model_name, **llm_kwargs)
 
     # Best-effort: ensure token usage is included in streaming responses.
     # Some providers (notably OpenAI) omit usage in streaming unless explicitly enabled.

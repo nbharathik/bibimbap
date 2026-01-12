@@ -1,7 +1,13 @@
 {
   "questions_csv": "data/questions.csv",
   "num_samples": 1,
-  "model_name": "openai:gpt-4.1-mini",
+  "model_name": "blablador:Qwen3-Coder-30B-A3B-Instruct",
+  "blablador": {
+    "base_url": "https://api.helmholtz-blablador.fz-juelich.de/v1",
+    "api_key_env": "BLABLADOR_API_KEY",
+    "discover_models": false,
+    "temperature": 0
+  },
   "system_prompt": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation. You must always load the ifc file first.",
   "cache_source": null,
   "mcp_servers": {
