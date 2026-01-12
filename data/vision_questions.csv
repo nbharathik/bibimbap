@@ -1,0 +1,8 @@
+id,category,image_paths,question,answer_type,expected,system_prompt
+1,image,data/images/TallBuilding_1.png,How many floors does this building have?,number,,You are a visual question answering system. Answer using only the provided image(s).
+2,image,data/images/TallBuilding_1.png,How many windows/openings are visible?,number,,You are a visual question answering system. Answer using only the provided image(s).
+3,image,data/images/BasicHouse_1.png,What is the color of the roof?,text,,You are a visual question answering system. Answer using only the provided image(s).
+4,image,data/images/BasicHouse_2.png,How many exterior doors are visible?,number,,You are a visual question answering system. Answer using only the provided image(s).
+5,floorplan,data/floorplan/22.png,How many rooms are there?,number,,You are a floorplan analysis system. Answer using only the provided image(s).
+6,floorplan,data/floorplan/22.png,Is there a door?,boolean,,You are a floorplan analysis system. Answer using only the provided image(s).
+7,floorplan,data/floorplan/22.png,What is the color at the top left corner?,text,,You are a floorplan analysis system. Answer using only the provided image(s).
