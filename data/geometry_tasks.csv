@@ -1,0 +1,11 @@
+question,test,ifc-file,structured-output,CRUD
+"Create a slab that has a width of 0.2m and is placed on the upper outer edges of the four columns in the IFC file",geometry_test_01,01/01/01_01_001.ifc,geometry_output_01,create
+"Create a column in the centroid of the four walls in this IFC file",geometry_test_02,01/01/01_01_002.ifc,geometry_output_02,create
+"Add a door to the wall that is north (+Y direction) of the wall with GlobalId = ""3YQ$1CPXD2Mh2vQ18vV$hw""",geometry_test_03,01/01/01_01_003.ifc,geometry_output_03,update
+"Insert a room (IfcSpace) to the area that is left of the column with GlobalId = ""3A5GfH23DBvBYpavCfWh4z""",geometry_test_04,01/01/01_01_004.ifc,geometry_output_04,create
+"Create a wall with a length of 5m starting at point (10,5) pointing to direction (1,0)",geometry_test_05,empty.ifc,geometry_output_05,create
+
+
+
+
+

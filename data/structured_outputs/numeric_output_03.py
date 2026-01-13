@@ -1,0 +1,6 @@
+from pydantic import BaseModel, Field
+
+
+class ModelOutput(BaseModel):
+    value: float = Field(description="Numeric answer")
+    raw_model_response: str = Field(description="The raw model response")

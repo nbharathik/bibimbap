@@ -1,0 +1,18 @@
+question,test,ifc-file,structured-output,CRUD
+"Retrieve the net floor area of the room with GlobalId = ""3N9Z0YGDv8JuEhl24cnvVA""",numeric_test_01,01/03/01_03_001.ifc,numeric_output_01,retrieve
+"Retrieve the net floor area of all the rooms",numeric_test_02,01/03/01_03_002.ifc,numeric_output_02,retrieve
+"Retrieve the gross floor area of the second floor",numeric_test_03,01/03/01_03_003.ifc,numeric_output_03,retrieve
+"Retrieve the gross floor area of all storeys",numeric_test_04,01/03/01_03_004.ifc,numeric_output_04,retrieve
+"Retrieve the inner net wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_05,01/03/01_03_005.ifc,numeric_output_05,retrieve
+"Retrieve the outer net wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_06,01/03/01_03_006.ifc,numeric_output_06,retrieve
+"Retrieve the inner net wall area of the walls with GlobalIds = [""37DacD4NnAp8bYABNd$pI9"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_07,01/03/01_03_007.ifc,numeric_output_07,retrieve
+
+
+
+
+
+
+
+
+
+

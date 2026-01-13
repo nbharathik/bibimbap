@@ -1,0 +1,20 @@
+from data.tests.utils import extract_numeric_value, within_tolerance
+
+
+def execute_test(ifc_file, edited_ifc_file, model_output):
+    expected = 17.11
+    abs_tol = 0.1
+    rel_tol = 0.001
+
+    predicted = extract_numeric_value(model_output)
+    ok = predicted is not None and within_tolerance(predicted, expected, abs_tol, rel_tol)
+    
+    print(ok)
+    
+    return {
+        "within_tolerance": ok,
+        "expected": expected,
+        "predicted": predicted,
+        "abs_tol": abs_tol,
+        "rel_tol": rel_tol
+    }
