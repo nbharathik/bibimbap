@@ -1,5 +1,5 @@
 {
-  "questions_csv": "data/questions.csv",
+  "questions_csv": ["data/questions.csv"],
   "num_samples": 1,
   "model_name": "openai:gpt-4.1-mini",
   "system_prompt": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation. You must always load the ifc file first.",
