@@ -413,8 +413,14 @@ async def main():
         ifc_path = ifc_dir / row["ifc-file"]
 
         # load the structured output python object
-        if not pd.isna(row["structured-output"]):
-            structured_output = f"{structured_outputs_module}.{row['structured-output']}"
+        structured_output_cell = row.get("structured-output")
+        structured_output_name = (
+            str(structured_output_cell).strip()
+            if structured_output_cell is not None and not pd.isna(structured_output_cell)
+            else ""
+        )
+        if structured_output_name:
+            structured_output = f"{structured_outputs_module}.{structured_output_name}"
             output_object = importlib.import_module(structured_output).ModelOutput
         else:
             output_object = None
