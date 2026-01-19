@@ -1,0 +1,9 @@
+questiontestifc-filestructured-outputCRUD
+Provide the global id of the wall that separates the room with the ids 3Vyqk8cSj8TOuAk6zHUwKx and 3Vyqk8cSj8TOuAk6zHUwJB.topological_test_0601/02/01_02_006.ifctopological_output_06retrieve
+Provide the global ids of the slabs that close the room with the id 3Vyqk8cSj8TOuAk6zHUwKx.topological_test_0701/02/01_02_007.ifctopological_output_07retrieve
+Provide the global ids of the columns that touch the room with the id 3wugWiepr7zgNK68VeZIPn.topological_test_0801/02/01_02_008.ifctopological_output_08retrieve
+Provide the global id of the room that has no adjacency to the room with the id 1mbvTd20X72ePAvoaDnxNU.topological_test_0901/02/01_02_009.ifctopological_output_09retrieve
+Provide the global id of the room that is open to the exterior.topological_test_1001/02/01_02_010.ifctopological_output_10retrieve
+
+Delete the room that is enclosed by the walls with global ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV.topological_test_1801/02/01_02_018.ifctopological_output_18delete
+Delete the columns that are outside of the rooms with global ids 08usg60IH8OxdvepHCDp6f, 08usg60IH8OxdvepHCDp6c.topological_test_2001/02/01_02_020.ifctopological_output_20delete
