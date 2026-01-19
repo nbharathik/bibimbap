@@ -6,7 +6,7 @@
   "cache_source": null,
   "mcp_servers": {
     "ifc-bonsai-mcp": {
-      "command": "C:\\\\Users\\\\bhara\\\\Documents\\\\University of Rostock\\\\Project\\\\ifc-bonsai-mcp\\\\.venv\\\\Scripts\\\\python.exe",
+      "command": "C:\\\\Users\\\\ckujatadm\\\\Documents\\\\AI4SC\\\\ifc-bonsai-mcp\\\\.venv\\\\Scripts\\\\python.exe",
       "args": [
         "-m",
         "blender_mcp.server"
