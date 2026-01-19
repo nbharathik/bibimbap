@@ -9,11 +9,11 @@ question,test,ifc-file,structured-output,CRUD
 "Provide the distance between the longest walls",geometry_test_08,01/01/01_01_008.ifc,geom_output_08,retrieve
 "Provide the ids of the walls that shape a triangle",geometry_test_09,01/01/01_01_009.ifc,geom_output_09,retrieve
 "Provide total inner length of the two walls with GlobalId = ""38GaXhC7P9afGO$ddCnYtE"" and GlobalId = ""38GaXhC7P9afGO$ddCnYr0""",geometry_test_10,01/01/01_01_010.ifc,geom_output_10,retrieve
-,,,,
-,,,,
-,,,,
-,,,,
-,,,,
+"Decrease the height of all walls by 0.5 m on the 2nd storey",geometry_test_11,01/01/01_01_011.ifc,,update
+"Rotate wall by +45° around its center which is parallel to wall with GlobalId = ""1$zxNs50z3OeFBpABtoN40""",geometry_test_12,01/01/01_01_012.ifc,,update
+"Move the window by 3m along the x axis which is wider than 1.50m",geometry_test_13,01/01/01_01_013.ifc,,update
+"Increase the length of one side of the slab so that it forms a square",geometry_test_14,01/01/01_01_014.ifc,,update
+"Move the column so that all columns form a rectangle",geometry_test_15,01/01/01_01_015.ifc,,update
 "Delete the door that is between the doors with ids GlobalId = ""1g0NIEjcH1lfGqbYWRqtDg"" and GlobalId = ""1g0NIEjcH1lfGqbYWRqt8M""",geometry_test_16,01/01/01_01_016.ifc,geom_output_16,delete
 "Remove the walls that form the exterior walls separated from the main structure in the ground floor",geometry_test_17,01/01/01_01_017.ifc,geom_output_17,delete
 "Take out the windows that are in the west walls. +Y is north and +X is east direction.",geometry_test_18,01/01/01_01_018.ifc,,delete
