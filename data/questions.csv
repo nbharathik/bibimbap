@@ -5,10 +5,10 @@ Add an opening of size 5 by 5 meters to the center of the slab with id 11kJIqz$n
 "Insert a column with the height of 3m in (12, 8).",test_04,basic_tasks.ifc,,create
 "Add a wall with a length of 15m beginning in (0, -10).",test_05,basic_tasks.ifc,,create
 ,,,,
-Provide the area of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_06,basic_tasks.ifc,output_06,retrieve
-Take off the length of the wall with id 22hyxvAPr65PFt9WZfHSKC.,test_07,basic_tasks.ifc,output_07,retrieve
-Provide the volume of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_08,basic_tasks.ifc,output_08,retrieve
-"Provide the distance, center to center, of the columns with ids 22hyxvAPr65PFt9WZfHSMr and 22hyxvAPr65PFt9WZfHSMu.",test_09,basic_tasks.ifc,output_09,retrieve
+Provide the area in square meters of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_06,basic_tasks.ifc,output_06,retrieve
+Take off the length in meters of the wall with id 22hyxvAPr65PFt9WZfHSKC.,test_07,basic_tasks.ifc,output_07,retrieve
+Provide the volume in cubic meters of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_08,basic_tasks.ifc,output_08,retrieve
+"Provide the distance in meters, center to center, of the columns with ids 22hyxvAPr65PFt9WZfHSMr and 22hyxvAPr65PFt9WZfHSMu.",test_09,basic_tasks.ifc,output_09,retrieve
 Provide the global id of the wall that has a length of 5m.,test_10,basic_tasks.ifc,output_10,retrieve
 ,,,,
 Rotate the wall with id 22hyxvAPr65PFt9WZfHSP3 by +90 degree around the z axis.,test_11,basic_tasks.ifc,,update

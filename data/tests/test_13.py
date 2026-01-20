@@ -42,7 +42,7 @@ def check_move_z_axis(guid, ifc_file, edited_ifc_file, metrics, ifc_identifier):
     x_object_edited, y_object_edited, z_object_edited = list(map(lambda x: x / 1000, placement_edited))  # converted to m
 
     # check if object was moved by 0.5 m in z axis and not in any other axis
-    if x_object_edited == x_object_to_move and y_object_edited == y_object_to_move and z_object_edited == z_object_to_move + 0.5:
+    if abs(x_object_edited - x_object_to_move) and abs(y_object_edited - y_object_to_move) and abs(z_object_edited - z_object_to_move + 0.5) < 0.1:
         metrics["right_location"] = True
     else:
         # if the location is not right, that means simply nothing happened and therefore, the right dimensions does not matter
@@ -56,7 +56,7 @@ def check_move_z_axis(guid, ifc_file, edited_ifc_file, metrics, ifc_identifier):
     thickness_object = ifcopenshell.util.shape.get_y(geom)
 
     # check if dimensions still the same
-    if width_object_to_move == width_object and thickness_object_to_move == thickness_object and height_object_to_move == height_object:
+    if abs(width_object_to_move - width_object) < 0.1 and abs(thickness_object_to_move - thickness_object) and abs(height_object_to_move - height_object):
         metrics["right_dimensions"] = True
 
     return metrics

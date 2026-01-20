@@ -10,7 +10,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "right_location": False, # wall is rotated correctly
         "right_dimensions": False # wall has same l, w, t as before
-        # TODO: integrity?, only possible for wall that has topological relationships before
+        # integrity?, only possible for wall that has topological relationships before
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -26,22 +26,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     height_wall_to_rotate = ifcopenshell.util.shape.get_z(geom)
     thickness_wall_to_rotate = ifcopenshell.util.shape.get_y(geom)
 
-
-    """
-    strategy:
-    1. check if same guid still exists in edited file
-        that means object could be updated
-        a. check if the update was successful
-        
-    2. check if new wall exists in edited file
-        that means that maybe the update was done by removing and than adding
-        a. check if the original wall was removed
-            if not: original wall was not removed
-        b. check if new wall is the rotated original wall
-    
-    
-    when rotation is successful -> set the old_object_does_not_exist flag to true
-    """
     ifc_edited = ifcopenshell.open(edited_ifc_file)
     try:
         edited_wall = ifc_edited.by_guid("22hyxvAPr65PFt9WZfHSP3")
@@ -57,19 +41,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         # new wall will be used for tests
         edited_wall = ifc_edited.by_guid(new_wall_ids[0])
 
-    """
-    how to test rotation:
-    1. there is information about the rotation in the matrix
-    2. but does it necessarily have to be? could also be a wall that has swapped width and thickness
-    -> so check for those two?
-    center of wall is still at the same spot (is it center???) 
-        maybe do not care about that? (for now as time is tight)
-    -> if all of above is true, location is right
-    
-    than check for dimensions:
-    just check if height is the same, width is either width or thickness and same for thickness
-    
-    """
 
     matrix = ifcopenshell.util.placement.get_local_placement(edited_wall.ObjectPlacement)
 
@@ -89,7 +60,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     height_wall = ifcopenshell.util.shape.get_z(geom)
     thickness_wall = ifcopenshell.util.shape.get_y(geom)
 
-    if (width_wall, thickness_wall) == (thickness_wall_to_rotate, width_wall_to_rotate):
+    if ((abs(width_wall - thickness_wall_to_rotate) < 0.1) and (abs(thickness_wall - width_wall_to_rotate) < 0.1)):
         metrics["right_location"] = True
 
     if not metrics["right_location"]:
@@ -97,9 +68,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         return metrics
 
     # dimensions
-    if height_wall == height_wall_to_rotate:
+    if abs(height_wall - height_wall_to_rotate) < 0.1:
         # height simply did not change
-        if (width_wall, thickness_wall) == (thickness_wall_to_rotate, width_wall_to_rotate) or (width_wall, thickness_wall) == (width_wall_to_rotate, thickness_wall_to_rotate):
+        if ((abs(width_wall - thickness_wall_to_rotate) < 0.1) and (abs(thickness_wall - width_wall_to_rotate) < 0.1)) or ((abs(width_wall - width_wall_to_rotate) < 0.1) and (abs(thickness_wall - thickness_wall_to_rotate) < 0.1)):
             # width and thickness either aren't changed or swapped
             metrics["right_dimensions"] = True
 

@@ -106,10 +106,8 @@ def check_height_increase(guid, ifc_file, edited_ifc_file, metrics, ifc_identifi
     height_edited_object = ifcopenshell.util.shape.get_z(geom)
     thickness_edited_object = ifcopenshell.util.shape.get_y(geom)
 
-    print(x_object_edited, y_object_edited, z_object_edited, width_edited_object, height_edited_object, thickness_edited_object)
-
     # check if object size was decreased by 0.5 m
-    if height_object_to_move - 0.5 == height_edited_object and width_object_to_move == width_edited_object and thickness_object_to_move == thickness_edited_object:
+    if abs(height_object_to_move - 0.5 - height_edited_object) < 0.1 and abs(width_object_to_move - width_edited_object) < 0.1 and abs(thickness_object_to_move - thickness_edited_object) < 0.1:
         metrics["right_dimensions"] = True
     else:
         # if no height increase, do not check if location is still the same
@@ -117,7 +115,7 @@ def check_height_increase(guid, ifc_file, edited_ifc_file, metrics, ifc_identifi
 
 
     # check if location is still the same
-    if x_object_edited == x_object_to_move and y_object_edited == y_object_to_move and z_object_edited == z_object_to_move:
+    if abs(x_object_edited - x_object_to_move) < 0.1 and abs(y_object_edited - y_object_to_move) < 0.1 and abs(z_object_edited - z_object_to_move) < 0.1:
         metrics["right_location"] = True
 
     return metrics

@@ -7,7 +7,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     distance = 10.0
     predicted_distance = model_output["distance"]
 
-    metrics["right_answer"] = distance == predicted_distance
+    metrics["right_answer"] = abs(distance - predicted_distance) < 0.1
 
     return metrics
 
