@@ -1,8 +1,8 @@
 {
   "questions_csv": "data/vision_questions.csv",
   "num_samples": 1,
-  "provider": "gemini",
-  "model_name": "gemini-2.5-flash",
+  "provider": "openai",
+  "model_name": "gpt-4.1-mini",
   "system_prompt": "You are a visual question answering system. Answer using only the provided image(s).",
   "cache_source": null,
   "paths": {

@@ -1,4 +1,5 @@
 import argparse
+import base64
 import csv
 import json
 import os
@@ -262,13 +263,84 @@ class GeminiVisionModel(VisionModel):
         return text, meta
 
 
+class OpenAIVisionModel(VisionModel):
+    def __init__(self, model_name: str, api_key: Optional[str] = None):
+        self.model_name = model_name
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise SystemExit("Missing OPENAI_API_KEY in environment.")
+
+        try:
+            import openai  # type: ignore
+        except Exception as exc:
+            raise SystemExit(
+                "OpenAI provider requires package 'openai'. "
+                "Install it via: pip install openai\n"
+                f"Import error: {exc}"
+            )
+
+        self.client = openai.OpenAI(api_key=self.api_key)
+
+    def generate(self, *, system_prompt: str, user_prompt: str, image_paths: List[Path]) -> Tuple[str, Dict[str, Any]]:
+        image_contents = []
+        for p in image_paths:
+            with open(p, "rb") as img_file:
+                img_data = base64.b64encode(img_file.read()).decode("utf-8")
+                ext = p.suffix.lower()
+                if ext in [".jpg", ".jpeg"]:
+                    media_type = "image/jpeg"
+                elif ext == ".png":
+                    media_type = "image/png"
+                elif ext == ".gif":
+                    media_type = "image/gif"
+                elif ext == ".webp":
+                    media_type = "image/webp"
+                else:
+                    media_type = "image/jpeg" 
+                
+                image_contents.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{media_type};base64,{img_data}"
+                    }
+                })
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    *image_contents
+                ]
+            }
+        ]
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            max_tokens=1000
+        )
+
+        text = response.choices[0].message.content or ""
+
+        meta: Dict[str, Any] = {}
+        if response.usage:
+            meta["input_tokens"] = int(response.usage.prompt_tokens or 0)
+            meta["output_tokens"] = int(response.usage.completion_tokens or 0)
+        
+        return text, meta
+
+
 def build_provider(provider: str, model_name: str) -> VisionModel:
     p = (provider or "").strip().lower()
     if p == "dummy":
         return DummyVisionModel()
     if p == "gemini":
         return GeminiVisionModel(model_name=model_name)
-    raise SystemExit(f"Unknown provider: {provider}. Supported: gemini, dummy")
+    if p == "openai":
+        return OpenAIVisionModel(model_name=model_name)
+    raise SystemExit(f"Unknown provider: {provider}. Supported: openai, gemini, dummy")
 
 
 def main() -> None:
