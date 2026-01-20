@@ -1,0 +1,26 @@
+name: bim_bench
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  # Core Data & Requests
+  - pandas~=2.3.3
+  - requests>=2.31.0
+  - pillow>=10.0.0
+  
+  # AI & LangChain Ecosystem
+  - langchain~=1.0.3
+  - langchain-openai>=0.2.0
+  - langgraph~=1.0.2
+  - langchain-mcp-adapters>=0.1.0
+  - google-generativeai>=0.8.0
+  
+  # Utilities
+  - pydantic~=2.12.3
+  - python-dotenv~=1.2.1
+  
+  # Pip-specific dependencies (for exact version matching)
+  - pip
+  - pip:
+    - ifcopenshell==0.8.3.post2
+    - dotenv~=0.9.9

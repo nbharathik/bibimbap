@@ -1,7 +1,7 @@
 {
   "questions_csv": "data/questions.csv",
   "num_samples": 1,
-  "model_name": "blablador:Qwen3-Coder-30B-A3B-Instruct",
+  "model_name": "openai:gpt-4.1-mini",
   "blablador": {
     "base_url": "https://api.helmholtz-blablador.fz-juelich.de/v1",
     "api_key_env": "BLABLADOR_API_KEY",
