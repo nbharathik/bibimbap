@@ -17,3 +17,9 @@
    ```bash
    python mcp-client.py --config configs/benchmark.config.json
    ```
+## Vision Benchmark
+1. **Configure the benchmark**: Update `image_benchmark.config.example.json`
+2. **Run the benchmark**:
+   ```bash
+   python mcp-client.py --config configs/benchmark.config.json
+   ```
