@@ -1,9 +1,24 @@
 question,test,ifc-file,structured-output,CRUD
+"Add a wall to the room with the id 3_DHXxtdb3wRKlXgyMiH4s so that it gets fully enclosed",topological_test_01,01/02/01_02_001.ifc,,create
+"Insert a column to the inner sapace of the walls with ids 3_DHXxtdb3wRKlXgyMiHOP, 3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08", topological_test_02,01/02/01_02_002.ifc,,create
+"Insert a wall that separates the rooms with the ids 0rMMWWDi1E0Qbe7dlPjRaK, 0rMMWWDi1E0Qbe7dlPjRcx", topological_test_03,01/02/01_02_003.ifc,,create
+"Create a slab that closes the elements with the ids 3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiHOP 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08", topological_test_04,01/02/01_02_004.ifc,,create
+"Create a door in one of the existing walls so that it connects the inner space with the outdoor space.",topological_test_05,01/02/01_02_005.ifc,,create
+,,,,
 Provide the global id of the wall that separates the room with the ids 3Vyqk8cSj8TOuAk6zHUwKx and 3Vyqk8cSj8TOuAk6zHUwJB.,topological_test_06,01/02/01_02_006.ifc,topological_output_06,retrieve
 Provide the global ids of the slabs that close the room with the id 3Vyqk8cSj8TOuAk6zHUwKx.,topological_test_07,01/02/01_02_007.ifc,topological_output_07,retrieve
 Provide the global ids of the columns that touch the room with the id 3wugWiepr7zgNK68VeZIPn.,topological_test_08,01/02/01_02_008.ifc,topological_output_08,retrieve
 Provide the global id of the room that has no adjacency to the room with the id 1mbvTd20X72ePAvoaDnxNU.,topological_test_09,01/02/01_02_009.ifc,topological_output_09,retrieve
 Provide the global id of the room that is open to the exterior.,topological_test_10,01/02/01_02_010.ifc,topological_output_10,retrieve
 ,,,,
-"Delete the room that is enclosed by the walls with global ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV.",topological_test_18,01/02/01_02_018.ifc,topological_output_18,delete
-"Delete the columns that are outside of the rooms with global ids 08usg60IH8OxdvepHCDp6f, 08usg60IH8OxdvepHCDp6c.",topological_test_20,01/02/01_02_020.ifc,topological_output_20,delete
+"Change the height of all columns so that they touch the slab with id 0dxtXCDSn2mfP92h$AiPMM", topological_test_11,01/02/01_02_011.ifc,,update
+"Shorten the length of the wall by 1m that is outside of the walls with ids 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc", topological_test_12,01/02/01_02_012.ifc,,update
+"Change	the position of the window with the id 0HbU4cYqD2SBtSJYoQ_eW1 so that its inner right side touches the outside of the wall with the id 0HbU4cYqD2SBtSJYoQ_eXK", topological_test_13,01/02/01_02_013.ifc,,update
+"Trim the beams so that they touch the wall with the id 1A1LNnHqHFQwR1jv6PQkyv",topological_test_14,01/02/01_02_014.ifc,,update
+"Change the position of the slab with id 0CJwXarnHAeA7eFXxxI_is that it lays on the slab with the id 0CJwXarnHAeA7eFXxxI_hO.",topological_test_15,01/02/01_02_015.ifc,,update
+,,,,
+"Remove the wall that touches both the walls with ids 3cmsjRvPb4wf9t15K203w_ and 3cmsjRvPb4wf9t15K203XR.",topological_test_16,01/02/01_02_016.ifc,,delete
+"Delete the columns that have no relationship with the slab with the id 2IIWDJ6bzEPxU4iXeUX9Z5.",topological_test_17,01/02/01_02_017.ifc,,delete
+"Delete the room that is enclosed by the walls with global ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV.",topological_test_18,01/02/01_02_018.ifc,,delete
+"Remove the column that is inside of the walls with the ids 3Vyqk8cSj8TOuAk6zHUwIV, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ", topological_test_19,01/02/01_02_019.ifc,,delete
+"Delete the columns that are outside of the rooms with global ids 08usg60IH8OxdvepHCDp6f, 08usg60IH8OxdvepHCDp6c.",topological_test_20,01/02/01_02_020.ifc,,delete
