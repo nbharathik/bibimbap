@@ -1,42 +1,42 @@
-id,category,image_paths,question,answer_type,expected,system_prompt
-,image,data/images/small_house1.jpg,How many chairs are there in the image? ,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house1.jpg,How many chairs are there? Do not count armchairs.,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house1.jpg,How many armchairs are there in the image?,number,3,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house2.jpg,What color are the chairs?,text,yellow,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house2.jpg,Where can you find a pair of chairs in the image?,text,kitchen island/breakfast bar/counter,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house4.jpg,Where is the TV located relative to the sofa?,text,left,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house4.jpg,What is under the TV?,text,table,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house4.jpg,What is right next to the TV?,text,wardrobe/shelf,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house4.jpg,Is there a table in the room?,text,yes,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house4.jpg,What element in the scene is in Blue?,text,door,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house5.jpg,How many pillows are there on the bed?,number,2,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house5.jpg,How many wheels are on the chair?,number,5,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house5.jpg,What is in front of the chair?,text,desk,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house5.jpg,How many drawers does the table have?,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house6.jpg,How many doors are in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house6.jpg,What is in front of the right door?,text,sofa/armchair,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house7.jpg,What color is the chair?,text,darkblue/blue ,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house7.jpg,How many windows are there?,number,5,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house8.jpg,How many windows are there in the room?,number,3,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house8.jpg,List all the furniture that are colored black.,text,"sofas, tv, tv table",You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house9.jpg,How many shelves do you count on the cupboard next to the TV?,number,11,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house10.jpg,How many drawers are on the counter next to the dining table?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house10.jpg,How many chairs are in the image?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house11.jpg,How many drawers are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house11.jpg,How many doors are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house12.jpg,Where is the sink in relation to the stove?,text,right,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house12.jpg,How many stove burners are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house12.jpg,How many chairs are present in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house13.jpg,Where is the sink in relation to the stove?,text,right,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house13.jpg,How many stove burners are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house13.jpg,How many chairs are present in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house14.jpg,Where is the sink in relation to the stove?,text,left,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house14.jpg,How many stoves are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house14.jpg,How many doors do you count in the kitchen? Give an exact number.,number,22,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house15.jpg,How many chairs do you count in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house15.jpg,How many burners are on the kitchen stove? Give an exact number.,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house15.jpg,How many doors are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house16.jpg,How many floors does this building have?,number,4,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house16.jpg,How many windows are on this building?,number,8,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house18.jpg,How many windows are on this building?,number,5,You are a visual question answering system. Answer using only the provided image(s).
-,image,data/images/small_house18.jpg,How many doors are on this building?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+question_id,category,image_paths,question,answer_type,expected_answer,system_prompt
+1,image,data/images/small_house1.jpg,How many chairs are there in the image? ,number,8,You are a visual question answering system. Answer using only the provided image(s).
+2,image,data/images/small_house1.jpg,How many chairs are there? Do not count armchairs.,number,8,You are a visual question answering system. Answer using only the provided image(s).
+3,image,data/images/small_house1.jpg,How many armchairs are there in the image?,number,3,You are a visual question answering system. Answer using only the provided image(s).
+4,image,data/images/small_house2.jpg,What color are the chairs?,text,yellow,You are a visual question answering system. Answer using only the provided image(s).
+5,image,data/images/small_house2.jpg,Where can you find a pair of chairs in the image?,text,kitchen island/breakfast bar/counter,You are a visual question answering system. Answer using only the provided image(s).
+6,image,data/images/small_house4.jpg,Where is the TV located relative to the sofa?,text,left,You are a visual question answering system. Answer using only the provided image(s).
+7,image,data/images/small_house4.jpg,What is under the TV?,text,table,You are a visual question answering system. Answer using only the provided image(s).
+8,image,data/images/small_house4.jpg,What is right next to the TV?,text,wardrobe/shelf,You are a visual question answering system. Answer using only the provided image(s).
+9,image,data/images/small_house4.jpg,Is there a table in the room?,text,yes,You are a visual question answering system. Answer using only the provided image(s).
+10,image,data/images/small_house4.jpg,What element in the scene is in Blue?,text,door,You are a visual question answering system. Answer using only the provided image(s).
+11,image,data/images/small_house5.jpg,How many pillows are there on the bed?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+12,image,data/images/small_house5.jpg,How many wheels are on the chair?,number,5,You are a visual question answering system. Answer using only the provided image(s).
+13,image,data/images/small_house5.jpg,What is in front of the chair?,text,desk,You are a visual question answering system. Answer using only the provided image(s).
+14,image,data/images/small_house5.jpg,How many drawers does the table have?,number,4,You are a visual question answering system. Answer using only the provided image(s).
+15,image,data/images/small_house6.jpg,How many doors are in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+16,image,data/images/small_house6.jpg,What is in front of the right door?,text,sofa/armchair,You are a visual question answering system. Answer using only the provided image(s).
+17,image,data/images/small_house7.jpg,What color is the chair?,text,darkblue/blue ,You are a visual question answering system. Answer using only the provided image(s).
+18,image,data/images/small_house7.jpg,How many windows are there?,number,5,You are a visual question answering system. Answer using only the provided image(s).
+19,image,data/images/small_house8.jpg,How many windows are there in the room?,number,3,You are a visual question answering system. Answer using only the provided image(s).
+20,image,data/images/small_house8.jpg,List all the furniture that are colored black.,text,"sofas, tv, tv table",You are a visual question answering system. Answer using only the provided image(s).
+21,image,data/images/small_house9.jpg,How many shelves do you count on the cupboard next to the TV?,number,11,You are a visual question answering system. Answer using only the provided image(s).
+22,image,data/images/small_house10.jpg,How many drawers are on the counter next to the dining table?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+23,image,data/images/small_house10.jpg,How many chairs are in the image?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+24,image,data/images/small_house11.jpg,How many drawers are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+25,image,data/images/small_house11.jpg,How many doors are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+26,image,data/images/small_house12.jpg,Where is the sink in relation to the stove?,text,right,You are a visual question answering system. Answer using only the provided image(s).
+27,image,data/images/small_house12.jpg,How many stove burners are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
+28,image,data/images/small_house12.jpg,How many chairs are present in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+29,image,data/images/small_house13.jpg,Where is the sink in relation to the stove?,text,right,You are a visual question answering system. Answer using only the provided image(s).
+30,image,data/images/small_house13.jpg,How many stove burners are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
+31,image,data/images/small_house13.jpg,How many chairs are present in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+32,image,data/images/small_house14.jpg,Where is the sink in relation to the stove?,text,left,You are a visual question answering system. Answer using only the provided image(s).
+33,image,data/images/small_house14.jpg,How many stoves are on the kitchen counter?,number,4,You are a visual question answering system. Answer using only the provided image(s).
+34,image,data/images/small_house14.jpg,How many doors do you count in the kitchen? Give an exact number.,number,22,You are a visual question answering system. Answer using only the provided image(s).
+35,image,data/images/small_house15.jpg,How many chairs do you count in the image?,number,2,You are a visual question answering system. Answer using only the provided image(s).
+36,image,data/images/small_house15.jpg,How many burners are on the kitchen stove? Give an exact number.,number,4,You are a visual question answering system. Answer using only the provided image(s).
+37,image,data/images/small_house15.jpg,How many doors are on the counter?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+38,image,data/images/small_house16.jpg,How many floors does this building have?,number,4,You are a visual question answering system. Answer using only the provided image(s).
+39,image,data/images/small_house16.jpg,How many windows are on this building?,number,8,You are a visual question answering system. Answer using only the provided image(s).
+40,image,data/images/small_house18.jpg,How many windows are on this building?,number,5,You are a visual question answering system. Answer using only the provided image(s).
+41,image,data/images/small_house18.jpg,How many doors are on this building?,number,2,You are a visual question answering system. Answer using only the provided image(s).
