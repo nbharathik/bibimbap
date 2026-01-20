@@ -22,6 +22,32 @@ try:
 except Exception:  # pragma: no cover
     get_usage_metadata_callback = None
 
+# Load tool groups configuration
+def load_tool_groups(config_path: Path) -> dict:
+    """Load tool groups configuration from JSON file."""
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            config = json.load(f)
+        
+        tool_groups = config["tool_groups"]
+        crud_ops = config["crud_operations"]
+        
+        result = {}
+        for crud_type, components in crud_ops.items():
+            tools = []
+            for component in components:
+                if isinstance(component, dict) and "inline_tools" in component:
+                    tools.extend(component["inline_tools"])
+                elif isinstance(component, str) and component in tool_groups:
+                    tools.extend(tool_groups[component])
+            result[crud_type] = tools
+        
+        return result
+    except Exception as e:
+        print(f"Warning: Failed to load tool groups config: {e}")
+        print("Using all available tools as fallback.")
+        return {}
+
 class State(TypedDict):
     prompt: str
     structured_output: object
@@ -30,6 +56,7 @@ class State(TypedDict):
     input_tokens: int
     output_tokens: int
     tool_call_iterations: List[dict]
+    filtered_tools: list
 
 def load_config(config_path: Path) -> dict:
     try:
@@ -63,6 +90,9 @@ async def main():
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
+    
+    tools_config_path = repo_root / "configs" / "mcp.tools.config.json"
+    TOOL_GROUPS = load_tool_groups(tools_config_path)
 
     config_path = Path(args.config)
     if not config_path.is_absolute():
@@ -187,14 +217,15 @@ async def main():
         prompt = state["prompt"]
         ifc_file_path = state["ifc_file_path"]
         structured_output = state["structured_output"]
+        filtered_tools = state.get("filtered_tools", mcp_tools)
 
         # Pre-load IFC into Blender without involving the LLM.
         await preload_ifc_in_blender(ifc_file_path)
 
         if structured_output:
-            agent = create_agent(model, mcp_tools, response_format=ToolStrategy(structured_output))
+            agent = create_agent(model, filtered_tools, response_format=ToolStrategy(structured_output))
         else:
-            agent = create_agent(model, mcp_tools)
+            agent = create_agent(model, filtered_tools)
 
         # invoke agents
         if load_ifc_tool is None:
@@ -430,6 +461,10 @@ async def main():
             crud_value = str(row["CRUD"]).strip().lower()
         is_retrieve = crud_value == "retrieve"
 
+        allowed_tool_names = TOOL_GROUPS.get(crud_value, [])
+        filtered_tools = [t for t in mcp_tools if any(t.name.endswith(name) for name in allowed_tool_names)] if allowed_tool_names else mcp_tools
+        # print(f"CRUD type: {crud_value}, Tools: {len(filtered_tools)}/{len(mcp_tools)}")
+
         edited_question_directory: Path | None = None
         if not is_retrieve:
             # Only create per-question directories when we will write edited IFC files
@@ -454,6 +489,7 @@ async def main():
                 "prompt": prompt,
                 "structured_output": output_object,
                 "ifc_file_path": str(edited_ifc_path.resolve()),
+                "filtered_tools": filtered_tools,
             }
 
             # invoke LLM
