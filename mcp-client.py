@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -78,6 +79,74 @@ def resolve_path(base_dir: Path, path_value: str) -> Path:
 def model_suffix(model_name: str) -> str:
     return model_name.split(":")[-1]
 
+
+def check_mcp_connectivity_subprocess(repo_root: Path, config_path: Path) -> bool:
+    """Run standalone connectivity test. Returns True if connected, False otherwise."""
+    test_script = repo_root / "bin" / "test_mcp_connectivity.py"
+    try:
+        result = subprocess.run(
+            ["python", str(test_script), "--config", str(config_path)],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        # Script prints "connect True" or "connect False"
+        output = result.stdout.strip()
+        is_connected = "connect True" in output
+        return is_connected
+    except subprocess.TimeoutExpired:
+        print("connect False")
+        return False
+    except Exception as exc:
+        print("connect False")
+        return False
+
+
+async def ensure_blender_connectivity(mcp_tools, probe_names=None, context_label="") -> None:
+    """Ping Blender MCP once; exit immediately if unreachable."""
+    probe_names = probe_names or [
+        "get_ifc_scene_overview",
+        "get_scene_info",
+        "get_selected_objects",
+    ]
+
+    probe_tool = next(
+        (
+            tool
+            for tool in mcp_tools
+            if any(tool.name == name or tool.name.endswith(name) for name in probe_names)
+        ),
+        None,
+    )
+
+    if probe_tool is None:
+        msg = "No probe tool found to check Blender MCP connectivity. Aborting."
+        raise SystemExit(msg)
+
+    try:
+        result = await probe_tool.ainvoke({})
+    except Exception as exc:
+        msg = f"Failed to reach Blender MCP server: {exc}"
+        print("connect False")
+        raise SystemExit(msg)
+
+    # Inspect result payload for soft-fail signals.
+    if isinstance(result, dict):
+        if result.get("error") or result.get("errors"):
+            msg = f"Probe returned errors: {result}"
+            print("connect False")
+            raise SystemExit(msg)
+        if result.get("success") is False:
+            msg = f"Probe reported success=False: {result}"
+            print("connect False")
+            raise SystemExit(msg)
+    if isinstance(result, str):
+        lowered = result.lower()
+        if "could not connect" in lowered or "not connect" in lowered:
+            msg = f"Probe output suggests connection failure: {result}"
+            print("connect False")
+            raise SystemExit(msg)
+
 # TODO: catch errors while calling tools so that the benchmark does not end
 async def main():
     default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.json"
@@ -86,6 +155,11 @@ async def main():
         "--config",
         default=str(default_config),
         help="Path to the benchmark config JSON file.",
+    )
+    parser.add_argument(
+        "--only-llm",
+        action="store_true",
+        help="Skip evaluation and only run the LLM pipeline.",
     )
     args = parser.parse_args()
 
@@ -98,6 +172,7 @@ async def main():
     if not config_path.is_absolute():
         config_path = (Path.cwd() / config_path).resolve()
     config = load_config(config_path)
+    evaluate = not args.only_llm
 
     base_dir = repo_root
     config_dir = config_path.parent
@@ -112,10 +187,15 @@ async def main():
     f_list = questions_val if isinstance(questions_val, list) else [questions_val]
     if not f_list:
         raise SystemExit("Config 'questions_csv' must be a path or a non-empty list of paths.")
-    questions = pd.concat(
-        [pd.read_csv(resolve_path(base_dir, f)) for f in f_list],
-        ignore_index=True,
-    )
+    
+    questions_list = []
+    for f in f_list:
+        csv_path = resolve_path(base_dir, f)
+        df = pd.read_csv(csv_path)
+        df['source_csv'] = Path(f).name  
+        questions_list.append(df)
+    
+    questions = pd.concat(questions_list, ignore_index=True)
 
     num_samples = config["num_samples"]
     model_name = config["model_name"]
@@ -123,18 +203,20 @@ async def main():
 
     # Best-effort: ensure token usage is included in streaming responses.
     # Some providers (notably OpenAI) omit usage in streaming unless explicitly enabled.
+    # Claude does NOT support stream_options, so only set it for OpenAI models.
     try:
-        if hasattr(model, "stream_options"):
-            existing = getattr(model, "stream_options") or {}
-            if isinstance(existing, dict):
-                model.stream_options = {**existing, "include_usage": True}
-        if hasattr(model, "model_kwargs"):
-            mk = getattr(model, "model_kwargs") or {}
-            if isinstance(mk, dict):
-                so = mk.get("stream_options") or {}
-                if isinstance(so, dict):
-                    mk["stream_options"] = {**so, "include_usage": True}
-                    model.model_kwargs = mk
+        if "openai" in model_name.lower():
+            if hasattr(model, "stream_options"):
+                existing = getattr(model, "stream_options") or {}
+                if isinstance(existing, dict):
+                    model.stream_options = {**existing, "include_usage": True}
+            if hasattr(model, "model_kwargs"):
+                mk = getattr(model, "model_kwargs") or {}
+                if isinstance(mk, dict):
+                    so = mk.get("stream_options") or {}
+                    if isinstance(so, dict):
+                        mk["stream_options"] = {**so, "include_usage": True}
+                        model.model_kwargs = mk
     except Exception:
         # If the underlying model does not support this, fall back silently.
         pass
@@ -179,6 +261,10 @@ async def main():
     )
     mcp_tools = await client.get_tools()
 
+    # Check MCP connectivity before processing any questions
+    if not check_mcp_connectivity_subprocess(repo_root, config_path):
+        raise SystemExit("MCP Plugin not reachable")
+
     load_ifc_tool = next(
         (
             tool
@@ -218,6 +304,9 @@ async def main():
         ifc_file_path = state["ifc_file_path"]
         structured_output = state["structured_output"]
         filtered_tools = state.get("filtered_tools", mcp_tools)
+
+        # Hard fail early if Blender MCP cannot be reached.
+        await ensure_blender_connectivity(mcp_tools)
 
         # Pre-load IFC into Blender without involving the LLM.
         await preload_ifc_in_blender(ifc_file_path)
@@ -397,6 +486,7 @@ async def main():
     
     # Load cache from source if specified
     cache_source = config.get("cache_source")
+    cache_source_path = None
     if cache_source:
         cache_source_path = resolve_path(base_dir, cache_source)
         if cache_source_path.exists():
@@ -414,6 +504,17 @@ async def main():
     else:
         print("No cache source specified. Starting with empty cache.")
 
+    if cache_source_path and cache_source_path.exists():
+        source_run_dir = cache_source_path.parent
+        for edited_dir in source_run_dir.glob("edited_ifc_*"):
+            if not edited_dir.is_dir():
+                continue
+            dest_dir = run_dir / edited_dir.name
+            try:
+                shutil.copytree(edited_dir, dest_dir, dirs_exist_ok=True)
+            except Exception as exc:
+                print(f"Warning: Failed to copy {edited_dir} to {dest_dir}: {exc}")
+
     # build langchain graph
     builder = StateGraph(State)
     builder.add_node("call_model", call_model)
@@ -428,6 +529,9 @@ async def main():
     for index, row in questions.iterrows():
         print(f"Processing question {int(str(index))+1} of {len(questions)}...")
         question_id = int(str(index))
+
+        # Fail fast per question before any work.
+        await ensure_blender_connectivity(mcp_tools, context_label=f"question {question_id+1}")
 
         # if prompt already processed, use the cached result
         if str(question_id) in cache:
@@ -520,21 +624,25 @@ async def main():
                 model_output = result_state["model_output"]
 
             # load and execute test
-            test = importlib.import_module(test_path)
-            # now you can call test.execute_test() and retrieve the evaluation metrics
-            try:
-                metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
-            except Exception as exc:
-                print(f"Error executing test for question {question_id}, sample {sample}: {exc}")
-                metrics = {}
+            metrics = None
+            score = None
+            if evaluate:
+                test = importlib.import_module(test_path)
+                # now you can call test.execute_test() and retrieve the evaluation metrics
+                try:
+                    metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
+                except Exception as exc:
+                    print(f"Error executing test for question {question_id}, sample {sample}: {exc}")
+                    metrics = {}
+                score = sum(metrics.values()) / len(metrics) if metrics else 0
 
             # store results for a sample
             sample_cache_object = {
                 "sample": sample + 1,
                 "model_output": model_output,
                 "tool_call_iterations": result_state["tool_call_iterations"],
-                "metrics": metrics, # dictionary of metrics
-                "score": sum(metrics.values())/len(metrics) if metrics else 0, # score = fulfilled metrics / all metrics
+                "metrics": metrics, # dictionary of metrics (filled by evaluation script)
+                "score": score, # score is filled by evaluation script
                 "input_tokens": result_state["input_tokens"],
                 "output_tokens": result_state["output_tokens"]
             }
@@ -546,6 +654,8 @@ async def main():
             "prompt": prompt,
             "model": model_name,
             "ifc_file": row["ifc-file"],
+            "source_csv": row.get("source_csv", "unknown"),
+            "crud_operation": crud_value,
             "results": sample_results,
             "timestamp": json.dumps(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         }

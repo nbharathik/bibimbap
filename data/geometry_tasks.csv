@@ -15,7 +15,7 @@ question,test,ifc-file,structured-output,CRUD
 "Increase the length of one side of the slab so that it forms a square",geometry_test_14,01/01/01_01_014.ifc,,update
 "Move the column so that all columns form a rectangle",geometry_test_15,01/01/01_01_015.ifc,,update
 "Delete the door that is between the doors with ids GlobalId = ""1g0NIEjcH1lfGqbYWRqtDg"" and GlobalId = ""1g0NIEjcH1lfGqbYWRqt8M""",geometry_test_16,01/01/01_01_016.ifc,,delete
-"Remove the walls that form the exterior walls separated from the main structure in the ground floor",geometry_test_17,01/01/01_01_017.ifc,,delete
+"Delete all the exterior walls from the building",geometry_test_17,01/01/01_01_017.ifc,,delete
 "Take out the windows that are in the west walls. +Y is north and +X is east direction.",geometry_test_18,01/01/01_01_018.ifc,,delete
 "Delete the two windows that are opposite to the wall with the id GlobalId = ""1mRYVM4YfFFBRkcbz1hHbM""",geometry_test_19,01/01/01_01_019.ifc,,delete
 "Delete the wall that is closest to the column with id GlobalId = ""0lwZAgQMb7yAIJTmmcGlwc"". Take midpoint of column to nearest edge of wall.",geometry_test_20,01/01/01_01_020.ifc,,delete
