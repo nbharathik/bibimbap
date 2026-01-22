@@ -7,9 +7,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Insert a column to the inner sapace of the walls with ids [GlobalId = "3_DHXxtdb3wRKlXgyMiHOP",
     GlobalId = "3_DHXxtdb3wRKlXgyMiHR$", GlobalId = "3_DHXxtdb3wRKlXgyMiH5o", GlobalId = "1IMYx2Ej12vu3iYKHoTn08"]")."""
     metrics = {
-        "object_exists": False, 
+        "object_exists": False,
         "right_location": False,
-        "right_dimensions": False 
+        "right_dimensions": False,
+        "integrity_constraint": False,  # NEW
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -21,7 +22,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     new_column_ids = list(edited_column_guids - original_column_guids)
     if len(new_column_ids) == 0:
+        metrics["integrity_constraint"] = all(
+            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+        )
         return metrics
+
     metrics["object_exists"] = True
     column = ifc_edited.by_guid(new_column_ids[0])
 
@@ -42,9 +47,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     col_center_y = (y_min_col + y_max_col) / 2
 
     # get wall geometry information to determine the inner space
-    wall_ids = ["3_DHXxtdb3wRKlXgyMiHOP", "3_DHXxtdb3wRKlXgyMiHR$", 
+    wall_ids = ["3_DHXxtdb3wRKlXgyMiHOP", "3_DHXxtdb3wRKlXgyMiHR$",
                 "3_DHXxtdb3wRKlXgyMiH5o", "1IMYx2Ej12vu3iYKHoTn08"]
-    
+
     try:
         wall_bounds = []
         for wall_id in wall_ids:
@@ -61,32 +66,36 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                 })
             except:
                 continue
-        
+
         if len(wall_bounds) >= 4:
             # calculate the bounding box of the inner space
             x_min_space = min(wb['x_min'] for wb in wall_bounds)
             x_max_space = max(wb['x_max'] for wb in wall_bounds)
             y_min_space = min(wb['y_min'] for wb in wall_bounds)
             y_max_space = max(wb['y_max'] for wb in wall_bounds)
-            
+
             # check if column center is within the inner space
             tolerance = 1.0
             if (x_min_space - tolerance <= col_center_x <= x_max_space + tolerance and
                 y_min_space - tolerance <= col_center_y <= y_max_space + tolerance):
                 metrics["right_location"] = True
-            
+
             # check if column has reasonable dimensions (not too small, not too large)
             col_width = x_max_col - x_min_col
             col_depth = y_max_col - y_min_col
             col_height = z_max_col - z_min_col
-            
+
             # typical column dimensions: 0.2m to 1.0m for width/depth
             if (0.1 <= col_width <= 2.0 and 0.1 <= col_depth <= 2.0 and col_height > 1.0):
                 metrics["right_dimensions"] = True
-            
+
     except Exception:
         pass
 
+    # NEW: integrity constraint = all other metrics are true
+    metrics["integrity_constraint"] = all(
+        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+    )
     return metrics
 
 if __name__ == "__main__":
@@ -97,3 +106,4 @@ if __name__ == "__main__":
     print(f"  object_exists: {result['object_exists']}")
     print(f"  right_location: {result['right_location']}")
     print(f"  right_dimensions: {result['right_dimensions']}")
+    print(f"  integrity_constraint: {result['integrity_constraint']}")  # NEW

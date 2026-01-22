@@ -14,7 +14,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     }
 
     metrics = {
-        "object_removed": False,
+        "object_not_exists": False,
         "integrity_constraint": False,
     }
 
@@ -28,14 +28,14 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             if getattr(obj, "GlobalId", None)
         }
 
-    # ---- object_removed ----
+    # ---- object_not_exists ----
     orig_column_ids = ids_of_type(ifc_original, "IfcColumn")
     edited_column_ids = ids_of_type(ifc_edited, "IfcColumn")
 
     existed_in_original = target_column_guids.issubset(orig_column_ids)
     absent_in_edited = target_column_guids.isdisjoint(edited_column_ids)
 
-    metrics["object_removed"] = existed_in_original and absent_in_edited
+    metrics["object_not_exists"] = existed_in_original and absent_in_edited
 
     # ---- integrity_constraint ----
     # No IfcRelationship in the edited model should still reference any removed column GUID.

@@ -6,7 +6,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     target_guid = "251vDGWZj4fBEsYpTPQwFu"
 
     metrics = {
-        "object_removed": False,
+        "object_not_exists": False,
         "integrity_constraint": False,
     }
 
@@ -20,10 +20,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             if getattr(obj, "GlobalId", None)
         }
 
-    # ---- object_removed ----
+    # ---- object_not_exists ----
     orig_columns = ids_of_type(ifc_original, "IfcColumn")
     edited_columns = ids_of_type(ifc_edited, "IfcColumn")
-    metrics["object_removed"] = (target_guid in orig_columns) and (target_guid not in edited_columns)
+    metrics["object_not_exists"] = (target_guid in orig_columns) and (target_guid not in edited_columns)
 
     # ---- integrity_constraint for column deletion ----
     # Integrity rule: no relationship in the edited IFC should still reference the deleted column.

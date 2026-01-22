@@ -9,7 +9,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "object_exists": False, 
         "right_location": False,
-        "right_dimensions": False 
+        "right_dimensions": False,
+        "integrity_constraint": False,  # NEW
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -21,7 +22,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     new_wall_ids = list(edited_wall_guids - original_wall_guids)
     if len(new_wall_ids) == 0:
+        metrics["integrity_constraint"] = all(
+            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+        )
         return metrics
+
     metrics["object_exists"] = True
     wall = ifc_edited.by_guid(new_wall_ids[0])
 
@@ -63,6 +68,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             abs(y_min_wall - y_min_room) < tolerance or 
             abs(y_max_wall - y_max_room) < tolerance
         )
+        print(x_min_wall)
+        print(x_min_room)
+        
         if at_boundary:
             metrics["right_location"] = True
         
@@ -75,6 +83,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     except Exception:
         pass
 
+    # NEW: integrity constraint = all other metrics are true
+    metrics["integrity_constraint"] = all(
+        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+    )
     return metrics
 
 if __name__ == "__main__":
@@ -85,3 +97,4 @@ if __name__ == "__main__":
     print(f"  object_exists: {result['object_exists']}")
     print(f"  right_location: {result['right_location']}")
     print(f"  right_dimensions: {result['right_dimensions']}")
+    print(f"  integrity_constraint: {result['integrity_constraint']}")  # NEW

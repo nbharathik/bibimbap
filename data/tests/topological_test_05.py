@@ -6,9 +6,10 @@ import ifcopenshell.util.shape
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Create a door in one of the existing walls so that it connects the inner space with the outdoor space."""
     metrics = {
-        "object_exists": False, 
+        "object_exists": False,
         "right_location": False,
-        "right_dimensions": False 
+        "right_dimensions": False,
+        "integrity_constraint": False,  # true iff door has a proper opening relationship
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -21,6 +22,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     new_door_ids = list(edited_door_guids - original_door_guids)
     if len(new_door_ids) == 0:
         return metrics
+
     metrics["object_exists"] = True
     door = ifc_edited.by_guid(new_door_ids[0])
 
@@ -41,7 +43,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         door_depth = y_max_door - y_min_door
         door_height = z_max_door - z_min_door
 
-        # check if door has typical dimensions (right_dimensions)
         # typical door: width 0.7-1.2m, height 1.8-2.5m, depth 0.05-0.3m
         if (0.6 <= door_width <= 1.5 and 1.5 <= door_height <= 3.0) or \
            (0.6 <= door_depth <= 1.5 and 1.5 <= door_height <= 3.0):
@@ -52,25 +53,37 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         door_center_y = (y_min_door + y_max_door) / 2
         door_center_z = (z_min_door + z_max_door) / 2
     except:
-        # if door geometry cannot be created, still check relationships
         door_center_x = door_center_y = door_center_z = None
 
     # check if door is located in/on a wall (right_location)
     try:
-        # Method 1: Check IFC relationships (IfcRelVoidsElement)
+        # --- Integrity constraint: opening exists and is voiding a wall, and door fills it ---
+        opening_created = False
         door_in_wall = False
-        for rel in ifc_edited.by_type("IfcRelVoidsElement"):
-            if rel.RelatedOpeningElement:
-                # Check if this opening has the door
-                for rel_fills in ifc_edited.by_type("IfcRelFillsElement"):
-                    if rel_fills.RelatingOpeningElement == rel.RelatedOpeningElement:
-                        if rel_fills.RelatedBuildingElement == door:
-                            # This door fills an opening in a wall
-                            if rel.RelatingBuildingElement.is_a("IfcWall"):
-                                door_in_wall = True
-                                break
-        
-        # Method 2: Check geometric proximity to walls
+
+        for rel_fills in ifc_edited.by_type("IfcRelFillsElement"):
+            # Door must fill an opening
+            if rel_fills.RelatedBuildingElement != door:
+                continue
+
+            opening = rel_fills.RelatingOpeningElement
+            if not opening or not opening.is_a("IfcOpeningElement"):
+                continue
+
+            # That opening must void a wall
+            for rel_voids in ifc_edited.by_type("IfcRelVoidsElement"):
+                if rel_voids.RelatedOpeningElement == opening and rel_voids.RelatingBuildingElement:
+                    if rel_voids.RelatingBuildingElement.is_a("IfcWall"):
+                        opening_created = True
+                        door_in_wall = True
+                        break
+
+            if opening_created:
+                break
+
+        metrics["integrity_constraint"] = opening_created  # NEW
+
+        # Method 2: geometric fallback for right_location (still keep right_location logic)
         if not door_in_wall and door_center_x is not None:
             walls = ifc_edited.by_type("IfcWall")
             for wall in walls:
@@ -85,8 +98,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                     z_min_wall = min(wall_vertices[:, 2])
                     z_max_wall = max(wall_vertices[:, 2])
 
-                    # check if door center is within wall bounds (with tolerance)
-                    tolerance = 0.5
+                    tolerance = 0.1
                     if (x_min_wall - tolerance <= door_center_x <= x_max_wall + tolerance and
                         y_min_wall - tolerance <= door_center_y <= y_max_wall + tolerance and
                         z_min_wall - tolerance <= door_center_z <= z_max_wall + tolerance):
@@ -94,7 +106,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                         break
                 except:
                     continue
-        
+
         if door_in_wall:
             metrics["right_location"] = True
 

@@ -8,7 +8,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     (i.e., no relationships in the edited model still reference the removed wall GUID).
 
     Metrics:
-      - object_removed: target wall exists in original as IfcWall/IfcWallStandardCase and
+      - object_not_exists: target wall exists in original as IfcWall/IfcWallStandardCase and
                        is absent in edited as IfcWall/IfcWallStandardCase.
       - integrity_constraint: in the edited file, no IfcRelationship still references
                               the removed wall GUID (no dangling references).
@@ -17,7 +17,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     target_wall_guid = "3cmsjRvPb4wf9t15K203Cj"
 
     metrics = {
-        "object_removed": False,
+        "object_not_exists": False,
         "integrity_constraint": False,
     }
 
@@ -33,12 +33,12 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                     out.add(gid)
         return out
 
-    # ---- object_removed ----
+    # ---- object_not_exists ----
     wall_types = ["IfcWall", "IfcWallStandardCase"]
     orig_wall_ids = ids_of_types(ifc_original, wall_types)
     edited_wall_ids = ids_of_types(ifc_edited, wall_types)
 
-    metrics["object_removed"] = (target_wall_guid in orig_wall_ids) and (target_wall_guid not in edited_wall_ids)
+    metrics["object_not_exists"] = (target_wall_guid in orig_wall_ids) and (target_wall_guid not in edited_wall_ids)
 
     # ---- integrity_constraint ----
     def contains_guid(value, guid):

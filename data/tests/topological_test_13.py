@@ -4,8 +4,8 @@ import ifcopenshell.util.placement
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """
     Metrics (all with tolerance 0.1):
-      - correct location: window global Y == 900 ± 0.1
-      - correct dimension: window OverallWidth/OverallHeight unchanged (± 0.1)
+      - right_location: window global Y == 900 ± 0.1
+      - right_dimensions: window OverallWidth/OverallHeight unchanged (± 0.1)
       - integrity_assured: opening global Y == 900 ± 0.1
     """
     WINDOW_GUID = "0HbU4cYqD2SBtSJYoQ_eW1"
@@ -13,8 +13,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     TOL = 0.1
 
     metrics = {
-        "correct location": False,
-        "correct dimension": False,
+        "right_location": False,
+        "right_dimensions": False,
         "integrity_assured": False,
     }
 
@@ -48,12 +48,12 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     if win_orig is None or win_edit is None:
         return metrics
 
-    # --- correct location ---
+    # --- right_location ---
     y_win = global_y(win_edit)
     if y_win is not None and approx_equal(y_win, TARGET_GLOBAL_Y):
-        metrics["correct location"] = True
+        metrics["right_location"] = True
 
-    # --- correct dimension (unchanged) ---
+    # --- right_dimensions (unchanged) ---
     ow_orig = getattr(win_orig, "OverallWidth", None)
     oh_orig = getattr(win_orig, "OverallHeight", None)
     ow_edit = getattr(win_edit, "OverallWidth", None)
@@ -61,7 +61,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     if None not in (ow_orig, oh_orig, ow_edit, oh_edit):
         if approx_equal(ow_orig, ow_edit) and approx_equal(oh_orig, oh_edit):
-            metrics["correct dimension"] = True
+            metrics["right_dimensions"] = True
 
     # --- integrity_assured (opening moved too) ---
     op_edit = find_opening_for_window(ifc_edited, win_edit)
@@ -73,3 +73,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         metrics["integrity_assured"] = True
 
     return metrics
+
+if __name__ == "__main__":
+    import sys
+    result = execute_test("/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_013.ifc","/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_013_out.ifc" , None)
+    print(result)

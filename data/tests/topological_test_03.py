@@ -7,9 +7,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Insert a wall that separates the rooms with the ids[ GlobalId = "0rMMWWDi1E0Qbe7dlPjRaK", 
     GlobalId = "0rMMWWDi1E0Qbe7dlPjRcx"]]")."""
     metrics = {
-        "object_exists": False, 
+        "object_exists": False,
         "right_location": False,
-        "right_dimensions": False 
+        "right_dimensions": False,
+        "integrity_constraint": False,  # NEW
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -21,7 +22,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     new_wall_ids = list(edited_wall_guids - original_wall_guids)
     if len(new_wall_ids) == 0:
+        metrics["integrity_constraint"] = all(
+            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+        )
         return metrics
+
     metrics["object_exists"] = True
     wall = ifc_edited.by_guid(new_wall_ids[0])
 
@@ -47,7 +52,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     # get both room geometry information
     room_ids = ["0rMMWWDi1E0Qbe7dlPjRaK", "0rMMWWDi1E0Qbe7dlPjRcx"]
-    
+
     try:
         room_bounds = []
         room_centers = []
@@ -61,7 +66,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                 x_max = max(room_vertices[:, 0])
                 y_min = min(room_vertices[:, 1])
                 y_max = max(room_vertices[:, 1])
-                
+
                 room_bounds.append({
                     'x_min': x_min,
                     'x_max': x_max,
@@ -74,36 +79,37 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                 })
             except:
                 continue
-        
+
         if len(room_bounds) >= 2:
             # check if wall is positioned between the two rooms (right_location)
-            # the wall should be located such that it could separate the two rooms
             room1_center = room_centers[0]
             room2_center = room_centers[1]
-            
+
             # calculate if wall is positioned between room centers
             tolerance = 2.0
-            
-            # check if wall intersects the line between room centers or is close to it
-            # simplified check: wall should be somewhat between the two room centers
+
             dist_room1_to_wall = ((wall_center_x - room1_center['x'])**2 + (wall_center_y - room1_center['y'])**2)**0.5
             dist_room2_to_wall = ((wall_center_x - room2_center['x'])**2 + (wall_center_y - room2_center['y'])**2)**0.5
             dist_room1_to_room2 = ((room1_center['x'] - room2_center['x'])**2 + (room1_center['y'] - room2_center['y'])**2)**0.5
-            
+
             # wall should be somewhere between the rooms (not beyond either room)
             if abs((dist_room1_to_wall + dist_room2_to_wall) - dist_room1_to_room2) < tolerance:
                 metrics["right_location"] = True
-            
+
             # check if wall has reasonable dimensions for separating rooms (right_dimensions)
             wall_length = max(width_wall, thickness_wall)
-            
+
             # wall should have reasonable height (> 1.5m typically) and length
             if height_wall > 1.5 and wall_length > 0.5:
                 metrics["right_dimensions"] = True
-            
+
     except Exception:
         pass
 
+    # NEW: integrity constraint = all other metrics are true
+    metrics["integrity_constraint"] = all(
+        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+    )
     return metrics
 
 if __name__ == "__main__":
@@ -114,3 +120,4 @@ if __name__ == "__main__":
     print(f"  object_exists: {result['object_exists']}")
     print(f"  right_location: {result['right_location']}")
     print(f"  right_dimensions: {result['right_dimensions']}")
+    print(f"  integrity_constraint: {result['integrity_constraint']}")  # NEW

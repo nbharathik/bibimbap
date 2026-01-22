@@ -12,7 +12,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     original_space = original_ifc.by_guid("3Vyqk8cSj8TOuAk6zHUwK5")
     relationship_ids = []
     for rel in original_ifc.get_inverse(original_space):
-        print(rel)
         if rel.is_a("IfcRelAggregates"):
             # these relationships need to be deleted when one of the spaces is deleted
             relationship_ids.append(rel.GlobalId)
