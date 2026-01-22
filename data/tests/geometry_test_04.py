@@ -54,10 +54,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
 	metrics = {
 		"object_exists": False,
-		"is_ifc_space": False,
-		"left_of_column": False,
-		"within_walls": False,
-		"footprint_matches": False,
+		"integrity_constraint": False, # integrity_constraint
+		"right_location": False, # right_location
+		"right_dimensions": False, # right_dimensions
 	}
 
 	try:
@@ -80,7 +79,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 		return metrics
 
 	metrics["object_exists"] = True
-	metrics["is_ifc_space"] = bool(space.is_a("IfcSpace"))
+	metrics["integrity_constraint"] = bool(space.is_a("IfcSpace"))
 
 	tgt_x_min = 0.20
 	tgt_y_min, tgt_y_max = 0.20, 6.70
@@ -95,15 +94,23 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 		and _within_abs(space_bbox["z_max"], tgt_z_max, tol)
 	)
 
-    # Sometimes it could create for the whole fotprint
+	# Sometimes it could create for the whole fotprint
+	left_of_column = False
+	within_walls = False
+	footprint_matches = False
 	if common_match:
 		if _within_abs(space_bbox["x_max"], 6.35, tol):
-			metrics["left_of_column"] = True
-			metrics["within_walls"] = True
-			metrics["footprint_matches"] = True
+			left_of_column = True
+			within_walls = True
+			footprint_matches = True
 		elif _within_abs(space_bbox["x_max"], 12.75, tol):
-			metrics["left_of_column"] = True
-			metrics["within_walls"] = True
-			metrics["footprint_matches"] = False
+			left_of_column = True
+			within_walls = True
+			footprint_matches = False
+
+	if left_of_column and within_walls:
+		metrics["right_location"] = True
+	if footprint_matches:
+		metrics["right_dimensions"] = True
 
 	return metrics

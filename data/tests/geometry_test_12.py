@@ -118,11 +118,13 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     - The wall with GUID "1$zxNs50z3OeFBpABtoN6K" should be rotated by 45 degrees.
 
     Metrics:
-    - rotation_correct: The wall has been rotated by 45° (±1° tolerance)
+    - right_location: The wall has been rotated by 45° (±1° tolerance)
     """
 
     metrics = {
-        "rotation_correct": False,
+        "integrity_constraint": False,
+        "right_dimensions": False,
+        "right_location": False,
     }
 
     try:
@@ -146,11 +148,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         angle_original = _get_wall_direction_angle(wall_original, unit_scale)
         angle_edited = _get_wall_direction_angle(wall_edited, unit_scale)
         
-        print(f"Original angle: {angle_original}, Edited angle: {angle_edited}")
-        
         rotation_diff = _angle_difference(angle_edited, angle_original)
         
-        metrics["rotation_correct"] = abs(rotation_diff - rotation_angle) <= angle_tolerance
+        metrics["right_location"] = abs(rotation_diff - rotation_angle) <= angle_tolerance
+        metrics["integrity_constraint"] = bool(wall_edited.is_a("IfcWall"))
+        metrics["right_dimensions"] = metrics["right_location"]
         
     except Exception:
         return metrics

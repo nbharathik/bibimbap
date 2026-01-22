@@ -8,4 +8,4 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     predicted = extract_numeric_value(model_output)
     ok = predicted is not None and within_tolerance(predicted, expected, abs_tol, rel_tol)
-    return {"within_tolerance": ok}
+    return {"right_answer": ok}

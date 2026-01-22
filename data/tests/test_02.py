@@ -8,7 +8,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "object_exists": False, # slab was created
         "right_location": False, # slab has its center in (-30, 0)
-        "right_dimensions": False # slab has size 10x5x0.2
+        "right_dimensions": False, # slab has size 10x5x0.2
+        "integrity_constraint": False # slab is an IfcSlab
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -48,6 +49,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     if x_min_slab + width_slab/2 == -30.0 and y_min_slab + thickness_slab/2 == 0.0:
         metrics["right_location"] = True
 
+    if slab.is_a("IfcSlab"):
+        metrics["integrity_constraint"] = True
     return metrics
 
 #execute_test("../ifc/basic_tasks.ifc", "../results/edited_ifc_gpt-4.1/15/basic_tasks_0.ifc", {})

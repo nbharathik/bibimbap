@@ -58,11 +58,13 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     - Result: slab should be approximately square (both sides ~10m).
 
     Metrics:
-    - is_square: The slab forms a square shape (x_len ≈ y_len within 0.2m tolerance)
+    - right_dimensions: The slab forms a square shape (x_len ≈ y_len within 0.2m tolerance)
     """
 
     metrics = {
-        "is_square": False,
+        "integrity_constraint": False,
+        "right_dimensions": False,
+        "right_location": False,
     }
 
     try:
@@ -93,7 +95,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         y_len = bbox_edited["y_len"]
         is_square = abs(x_len - y_len) <= square_tolerance
         
-        metrics["is_square"] = y_increased_correctly and is_square
+        metrics["right_dimensions"] = y_increased_correctly and is_square
+        metrics["integrity_constraint"] = bool(slab_edited.is_a("IfcSlab"))
+        metrics["right_location"] = metrics["integrity_constraint"]
         
     except Exception:
         return metrics

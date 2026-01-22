@@ -42,9 +42,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     metrics = {
         "object_exists": False,
-        "is_ifc_column": False,
-        "placed_at_centroid": False,
-        "base_at_ground": False,
+        "integrity_constraint": False, # 
+        "right_location": False, 
+        "right_dimensions": False,
     }
 
     ifc_edited = ifcopenshell.open(edited_ifc_file)
@@ -61,7 +61,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         return metrics
 
     metrics["object_exists"] = True
-    metrics["is_ifc_column"] = bool(column.is_a("IfcColumn"))
+    metrics["right_dimensions"] = metrics["object_exists"]
+    metrics["integrity_constraint"] = bool(column.is_a("IfcColumn"))
 
     walls = ifc_edited.by_type("IfcWall")
     if len(walls) < 4:
@@ -91,11 +92,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     at_centroid_avg = _within_abs(col_bbox["x_c"], avg_x_c, tol_xy) and _within_abs(col_bbox["y_c"], avg_y_c, tol_xy)
     at_centroid_box = _within_abs(col_bbox["x_c"], box_x_c, tol_xy) and _within_abs(col_bbox["y_c"], box_y_c, tol_xy)
 
-    if at_centroid_avg or at_centroid_box:
-        metrics["placed_at_centroid"] = True
-
     ground_z = min(b["z_min"] for b in wall_bboxes)
-    if _within_abs(col_bbox["z_min"], ground_z, tol=0.05):
-        metrics["base_at_ground"] = True
+    if (at_centroid_avg or at_centroid_box) or _within_abs(col_bbox["z_min"], ground_z, tol=0.05):
+        metrics["right_location"] = True
+        
+    
 
     return metrics

@@ -20,8 +20,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     """
 
     metrics = {
-        "door_deleted": False,
-        "opening_deleted": False,
+        "object_not_exists": False,
+        "integrity_constraint": False,
     }
 
     try:
@@ -31,9 +31,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     # 1) Door is deleted
     edited_deleted = _safe_by_guid(ifc_edited, DELETED_DOOR_GUID)
-    metrics["door_deleted"] = edited_deleted is None
+    metrics["object_not_exists"] = edited_deleted is None
 
     # 2) Opening is deleted
-    metrics["opening_deleted"] = _safe_by_guid(ifc_edited, DELETED_OPENING_GUID) is None
-
+    metrics["integrity_constraint"] = _safe_by_guid(ifc_edited, DELETED_OPENING_GUID) is None
     return metrics

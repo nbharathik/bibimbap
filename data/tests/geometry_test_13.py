@@ -61,11 +61,13 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     - All window objects should still exist in the edited IFC.
 
     Metrics:
-    - movement_correct: All window objects moved by 3m (±0.1m tolerance) along X-axis
+    - right_location: All window objects moved by 3m (±0.1m tolerance) along X-axis
     """
 
     metrics = {
-        "movement_correct": False,
+        "integrity_constraint": False,
+        "right_dimensions": False,
+        "right_location": False,
     }
 
     try:
@@ -115,5 +117,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             all_moved_correctly = False
             break
 
-    metrics["movement_correct"] = all_moved_correctly
+    metrics["right_location"] = all_moved_correctly
+    metrics["integrity_constraint"] = all(_safe_by_guid(ifc_edited, guid) is not None for guid in WINDOW_GUIDS)
+    metrics["right_dimensions"] = metrics["right_location"]
     return metrics

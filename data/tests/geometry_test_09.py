@@ -74,6 +74,5 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     has_exactly_three = len(predicted_set) == 3
 
     return {
-        "contains_all_three": contains_all_three,
-        "has_exactly_three": has_exactly_three,
-    }
+        "right_answer": contains_all_three and has_exactly_three
+    }   

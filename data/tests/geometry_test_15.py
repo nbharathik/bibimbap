@@ -91,7 +91,9 @@ def _forms_rectangle(centers, tolerance=0.3):
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
-        "forms_rectangle": False,
+        "right_dimensions": False,
+        "integrity_constraint": False,
+        "right_location": False,
     }
 
     try:
@@ -114,7 +116,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             bbox = _bbox_in_meters(col, unit_scale)
             centers.append((bbox["x_c"], bbox["y_c"]))
         
-        metrics["forms_rectangle"] = _forms_rectangle(centers)
+        metrics["right_dimensions"] = _forms_rectangle(centers)
+        integrity = all(col.is_a("IfcColumn") for col in columns)
+        metrics["integrity_constraint"] = integrity
+        metrics["right_location"] = metrics["right_dimensions"]
         
     except Exception:
         return metrics

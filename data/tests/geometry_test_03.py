@@ -80,10 +80,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
 	metrics = {
 		"object_exists": False,
-		"is_ifc_door": False,
-		"on_north_wall": False,
-		"base_at_ground": False,
-		"opening_created": False,
+		"integrity_constraint": False, # integrity_constraint
+		"right_location": False, # right_location
+		"right_dimensions": False, # right_dimensions	
 	}
 
 	try:
@@ -110,13 +109,17 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 		return metrics
 
 	metrics["object_exists"] = True
-	metrics["is_ifc_door"] = bool(door.is_a("IfcDoor"))
+	is_ifc_door = bool(door.is_a("IfcDoor"))
 
 	opening_rels = getattr(door, "FillsVoids", None) or []
+	opening_created = False
 	for rel in opening_rels:
 		if getattr(rel, "RelatingOpeningElement", None) is not None:
-			metrics["opening_created"] = True
+			opening_created = True
 			break
+
+	if is_ifc_door and opening_created:
+		metrics["integrity_constraint"] = True
 
 	walls = ifc_edited.by_type("IfcWallStandardCase") or ifc_edited.by_type("IfcWall")
 	if len(walls) < 2:
@@ -141,11 +144,17 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 	dist_to_north = abs(door_bbox["y_c"] - north_bbox["y_c"])
 	dist_to_target = abs(door_bbox["y_c"] - target_bbox["y_c"])
 
+	on_north_wall = False
 	if in_wall_plane and within_span_x and dist_to_north < dist_to_target:
-		metrics["on_north_wall"] = True
+		on_north_wall = True
 
 	ground_z = 0.0
-	if _within_abs(door_bbox["z_min"], ground_z, tol=0.05):
-		metrics["base_at_ground"] = True
+	base_at_ground = _within_abs(door_bbox["z_min"], ground_z, tol=0.05)
+
+	if on_north_wall and base_at_ground:
+		metrics["right_location"] = True
+  
+	if metrics["object_exists"]:
+		metrics["right_dimensions"] = True
 
 	return metrics

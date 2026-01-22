@@ -8,7 +8,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "object_exists": False, # column was created
         "right_location": False, # column is in (12, 8)
-        "right_dimensions": False # column has height of 3m
+        "right_dimensions": False, # column has height of 3m
+        "integrity_constraint": False # column is an IfcColumn
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -45,6 +46,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     if (x_min_column <= 12.0 <= x_max_column and y_min_column <= 8.0 <= y_max_column) or (x_min_column <= 8.0 <= x_max_column and y_min_column <= 12.0 <= y_max_column):
         metrics["right_location"] = True
+        
+    if column.is_a("IfcColumn"):
+        metrics["integrity_constraint"] = True
 
     return metrics
 

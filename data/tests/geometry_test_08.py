@@ -14,4 +14,4 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     predicted = extract_numeric_value(model_output)
     ok = predicted is not None and abs(predicted - expected) <= abs_tol
 
-    return {"exact_4m": ok}
+    return {"right_answer": ok}

@@ -29,7 +29,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     """
 
     metrics = {
-        "score": 0.0,
+        "object_not_exists": 0.0,
     }
 
     try:
@@ -46,8 +46,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     partial_wall_deleted = _safe_by_guid(ifc_edited, PARTIAL_WALL_GUID) is None
 
     if wall_deleted:
-        metrics["score"] = 1.0
+        metrics["object_not_exists"] = 1.0
     elif partial_wall_deleted:
-        metrics["score"] = 0.2
+        metrics["object_not_exists"] = 0.2
+    
+    metrics["integrity_constraint"] = metrics["object_not_exists"]
 
     return metrics

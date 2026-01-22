@@ -1,5 +1,7 @@
 import ifcopenshell
 
+from data.tests.geometry_test_17 import _exists
+
 
 WINDOW_GUIDS = [
     # Window group 1
@@ -28,15 +30,22 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     Note: This test does not attempt to infer "west wall" via geometry; it uses the
     provided ground-truth GUIDs.
     """
+    
+    metrics = {
+        "object_not_exists": False,
+        "integrity_constraint": False,
+    }
 
-    metrics = {f"deleted_{i+1}": False for i in range(len(WINDOW_GUIDS))}
 
     try:
         ifc_edited = ifcopenshell.open(edited_ifc_file)
     except Exception:
         return metrics
+    
+    all_deleted = all(
+        not _exists(ifc_edited, guid) for guid in WINDOW_GUIDS
+    )
 
-    for idx, guid in enumerate(WINDOW_GUIDS):
-        metrics[f"deleted_{idx+1}"] = _safe_by_guid(ifc_edited, guid) is None
-
+    metrics["object_not_exists"] = all_deleted
+    metrics["integrity_constraint"] = all_deleted
     return metrics

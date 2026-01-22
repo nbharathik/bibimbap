@@ -67,10 +67,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     - Individual wall checks: wall_{i}_height_correct for each wall
     """
 
-    metrics = {}
-
-    for i in range(len(WALL_GUIDS)):
-        metrics[f"wall_{i+1}_height_correct"] = False
+    metrics = {
+        "integrity_constraint": False,
+        "right_dimensions": False,
+        "right_location": False,
+    }
 
     try:
         ifc_original = ifcopenshell.open(ifc_file)
@@ -107,10 +108,17 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             height_diff = original_height - edited_height
             
             is_correct = _within_abs(height_diff, height_reduction, height_tolerance)
-            metrics[f"wall_{idx+1}_height_correct"] = is_correct
+            # metrics[f"wall_{idx+1}_height_correct"] = is_correct
             heights_correct.append(is_correct)
         except Exception:
             heights_correct.append(False)
             continue
+    
+    metrics["integrity_constraint"] = all(
+        wall_orig.is_a("IfcWall") and wall_edit.is_a("IfcWall")
+        for wall_orig, wall_edit in zip(walls_original, walls_edited)
+    )
+    metrics["right_dimensions"] = all(heights_correct)
+    metrics["right_location"] = metrics["right_dimensions"]
 
     return metrics

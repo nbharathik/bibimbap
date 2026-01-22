@@ -32,9 +32,9 @@ def _within_abs(value, expected, tol):
 def execute_test(ifc_file, edited_ifc_file, model_output):
 	metrics = {
 		"object_exists": False,
-		"is_ifc_wall": False,
-		"correct_start": False,
-		"correct_orientation": False
+		"integrity_constraint": False, # integrity_constraint
+		"right_location": False, # right_location
+		"right_dimensions": False, # right_dimensions
 	}
 
 	try:
@@ -54,22 +54,24 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 			bbox = _bbox_in_meters(wall, unit_scale)
 			
 			metrics["object_exists"] = True
-			metrics["is_ifc_wall"] = True
+			metrics["integrity_constraint"] = True
 
 			match_start_x = _within_abs(bbox["x_min"], 10.0, tol)
 			match_start_y = _within_abs(bbox["y_min"], 5.0, tol) or _within_abs(bbox["y_max"], 5.0, tol)
 			
 			if match_start_x and match_start_y:
-				metrics["correct_start"] = True
+				metrics["right_location"] = True
 				
 				x_len = bbox["x_max"] - bbox["x_min"]
 				y_len = bbox["y_max"] - bbox["y_min"]
 				
 				if x_len > y_len:
-					metrics["correct_orientation"] = True
+					metrics["right_dimensions"] = True
 				
 				break
 		except:
 			continue
 
 	return metrics
+
+#toDO chek for 5m length wall

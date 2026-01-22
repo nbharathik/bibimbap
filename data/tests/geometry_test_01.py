@@ -51,15 +51,14 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     Partial credit:
     - if another class is created (IfcCovering/IfcPlate/IfcBuildingElementProxy/IfcRoof), geometry metrics can still pass,
-      but `is_ifc_slab` stays False so `perfect` stays False.
+      but `right_location` stays False so `perfect` stays False.
     """
-
+    
     metrics = {
-        "object_exists": False,
-        "is_ifc_slab": False,
-        "thickness_0_2m": False,
-        "on_top_of_columns": False,
-        "spans_outer_edges": False,
+        "object_exists": False, 
+        "right_location": False, 
+        "right_dimensions": False, 
+        "integrity_constraint": False
     }
 
     ifc_edited = ifcopenshell.open(edited_ifc_file)
@@ -77,12 +76,12 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         return metrics
 
     metrics["object_exists"] = True
-    metrics["is_ifc_slab"] = bool(slab.is_a("IfcSlab"))
+    metrics["integrity_constraint"] = bool(slab.is_a("IfcSlab"))
 
     extents = [slab_bbox["x_len"], slab_bbox["y_len"], slab_bbox["z_len"]]
     thickness_est = min(extents)
     if _within_abs(thickness_est, 0.2, tol=0.02):
-        metrics["thickness_0_2m"] = True
+        metrics["right_dimensions"] = True
 
     # --- columns: this IFC has exactly 4 columns to begin with
     columns = ifc_edited.by_type("IfcColumn")
@@ -111,7 +110,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     max_overhang = 0.50
 
     if abs(slab_z_min - top_z) <= tol_z:
-        metrics["on_top_of_columns"] = True
+        metrics["right_location"] = True
 
     # "upper outer edges" => slab footprint should reach outer faces of columns.
     spans_outer = (
@@ -129,7 +128,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     )
 
     if spans_outer and not_too_large:
-        metrics["spans_outer_edges"] = True
+        metrics["right_location"] = True
 
     final_score = sum(metrics.values()) / len(metrics)
 

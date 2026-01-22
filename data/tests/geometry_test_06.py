@@ -20,7 +20,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
 	predicted = extract_numeric_value(model_output)
 	if predicted is None:
-		return {"within_range": False, "exact_7_2": False}
+		return {"right_answer": False}
 
 	within_range = min_accepted <= predicted <= max_accepted
 	exact_7_2 = abs(predicted - expected) <= exact_abs_tol
@@ -29,4 +29,4 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 	if exact_7_2:
 		within_range = True
 
-	return {"within_range": within_range, "exact_7_2": exact_7_2}
+	return {"right_answer": within_range}

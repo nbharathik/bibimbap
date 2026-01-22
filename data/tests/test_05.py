@@ -8,7 +8,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "object_exists": False, # wall was created
         "right_location": False, # wall starts at (0, -10)
-        "right_dimensions": False # wall has length of 15m
+        "right_dimensions": False, # wall has length of 15m
+        "integrity_constraint": False # wall is an IfcWall
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -45,6 +46,9 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     if (x_min_wall == 0.0 and (y_min_wall == -10.0 or y_max_wall == -10.0)) or (x_max_wall == 0.0 and (y_min_wall == -10.0 or y_max_wall == -10.0)):
         metrics["right_location"] = True
+        
+    if wall.is_a("IfcWall"):
+        metrics["integrity_constraint"] = True
 
     return metrics
 

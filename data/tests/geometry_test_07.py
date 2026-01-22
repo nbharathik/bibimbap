@@ -27,4 +27,4 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 		predicted = model_output
 
 	ok = _is_only_global_id(predicted) and str(predicted).strip().strip('"\'') == expected
-	return {"correct_id": ok}
+	return {"right_answer": ok}
