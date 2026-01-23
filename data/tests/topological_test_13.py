@@ -6,7 +6,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     Metrics (all with tolerance 0.1):
       - right_location: window global Y == 900 ± 0.1
       - right_dimensions: window OverallWidth/OverallHeight unchanged (± 0.1)
-      - integrity_assured: opening global Y == 900 ± 0.1
+      - integrity_constraint: opening global Y == 900 ± 0.1
     """
     WINDOW_GUID = "0HbU4cYqD2SBtSJYoQ_eW1"
     TARGET_GLOBAL_Y = 900.0
@@ -15,7 +15,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics = {
         "right_location": False,
         "right_dimensions": False,
-        "integrity_assured": False,
+        "integrity_constraint": False,
     }
 
     ifc_original = ifcopenshell.open(ifc_file)
@@ -63,14 +63,14 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         if approx_equal(ow_orig, ow_edit) and approx_equal(oh_orig, oh_edit):
             metrics["right_dimensions"] = True
 
-    # --- integrity_assured (opening moved too) ---
+    # --- integrity_constraint (opening moved too) ---
     op_edit = find_opening_for_window(ifc_edited, win_edit)
     if op_edit is None:
         return metrics
 
     y_open = global_y(op_edit)
     if y_open is not None and approx_equal(y_open, TARGET_GLOBAL_Y):
-        metrics["integrity_assured"] = True
+        metrics["integrity_constraint"] = True
 
     return metrics
 
