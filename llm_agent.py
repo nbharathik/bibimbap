@@ -553,17 +553,18 @@ async def main():
 
     # Best-effort: include usage in streaming
     try:
-        if hasattr(model, "stream_options"):
-            existing = getattr(model, "stream_options") or {}
-            if isinstance(existing, dict):
-                model.stream_options = {**existing, "include_usage": True}
-        if hasattr(model, "model_kwargs"):
-            mk = getattr(model, "model_kwargs") or {}
-            if isinstance(mk, dict):
-                so = mk.get("stream_options") or {}
-                if isinstance(so, dict):
-                    mk["stream_options"] = {**so, "include_usage": True}
-                    model.model_kwargs = mk
+        if "openai" in model_name.lower():
+            if hasattr(model, "stream_options"):
+                existing = getattr(model, "stream_options") or {}
+                if isinstance(existing, dict):
+                    model.stream_options = {**existing, "include_usage": True}
+            if hasattr(model, "model_kwargs"):
+                mk = getattr(model, "model_kwargs") or {}
+                if isinstance(mk, dict):
+                    so = mk.get("stream_options") or {}
+                    if isinstance(so, dict):
+                        mk["stream_options"] = {**so, "include_usage": True}
+                        model.model_kwargs = mk
     except Exception:
         pass
 
@@ -805,13 +806,24 @@ async def main():
                     else None
                 )
 
-                if finish_reason == "tool_calls":
+                if not finish_reason:
+                    finish_reason = (
+                        message.response_metadata.get("stop_reason")
+                        if getattr(message, "response_metadata", None)
+                        else None
+                    )
+
+                if finish_reason in ["tool_calls", "tool_use"]:
                     tool_calls = []
                     for tool_call in getattr(message, "tool_calls", []) or []:
-                        name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name", None)
-                        args = tool_call.get("args") if isinstance(tool_call, dict) else getattr(tool_call, "args", None)
+                        name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name",None)
+                        args = tool_call.get("args") if isinstance(tool_call, dict) else getattr(tool_call, "args",None)
                         if name and name != "ModelOutput":
                             tool_calls.append({"name": name, "args": args})
+
+                        if name == "ModelOutput":  # this is the end of anthropic chain when using structured output
+                            if isinstance(message.content, list) and len(message.content) > 0:
+                                model_out = message.content[0]['partial_json']
                     iterations.append(
                         {
                             "tool_calls": tool_calls,
@@ -820,8 +832,14 @@ async def main():
                         }
                     )
 
-                if finish_reason == "stop":
+                if finish_reason == "stop":  # openai
                     model_out = message.content if getattr(message, "content", None) is not None else model_out
+
+                if finish_reason == "end_turn":  # anthropic
+                    content = message.content if getattr(message, "content", None) is not None else model_out
+                    print(content)
+                    if isinstance(content, list):
+                        model_out = "".join([c['text'] for c in content if c['type'] == 'text'])
 
             return model_out, iterations, parsed_in, parsed_out
 
