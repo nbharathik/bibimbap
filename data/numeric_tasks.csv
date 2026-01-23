@@ -1,24 +1,24 @@
 question,test,ifc-file,structured-output,CRUD
-"Retrieve the net floor area of the room with GlobalId = ""3N9Z0YGDv8JuEhl24cnvVA""",numeric_test_01,01/03/01_03_001.ifc,numeric_output_01,retrieve
-"Retrieve the net floor area of all the rooms",numeric_test_02,01/03/01_03_002.ifc,numeric_output_02,retrieve
-"Retrieve the gross floor area of the second floor",numeric_test_03,01/03/01_03_003.ifc,numeric_output_03,retrieve
-"Retrieve the gross floor area of all storeys",numeric_test_04,01/03/01_03_004.ifc,numeric_output_04,retrieve
-"Retrieve the inner net wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_05,01/03/01_03_005.ifc,numeric_output_05,retrieve
-"Retrieve the outer net wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_06,01/03/01_03_006.ifc,numeric_output_06,retrieve
-"Retrieve the inner net wall area of the walls with GlobalIds = [""37DacD4NnAp8bYABNd$pI9"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_07,01/03/01_03_007.ifc,numeric_output_07,retrieve
-"Provide the outer net wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3gT"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3hM""]",numeric_test_08,01/03/01_03_008.ifc,numeric_output_08,retrieve
-"Provide the outer gross wall area of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3gT"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3hM""]",numeric_test_09,01/03/01_03_009.ifc,numeric_output_09,retrieve
-"Provide the inner gross wall area of the walls with GlobalIds = [""2DM19d52z3gAPlkXPTpJnG"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]. At wall junctions, do not trim wall faces; for this L-shaped wall set, include intersecting wall areas.",numeric_test_10,01/03/01_03_010.ifc,numeric_output_10,retrieve
-"Provide the area of the openings that are larger than 2 sqm",numeric_test_11,01/03/01_03_011.ifc,numeric_output_11,retrieve
-"Calculate the combined width of the openings with a sill",numeric_test_12,01/03/01_03_012.ifc,numeric_output_12,retrieve
-"Retrieve the length of all walls",numeric_test_13,01/03/01_03_013.ifc,numeric_output_13,retrieve
-"Provide the area of the opening in the slab with GlobalId = ""3IVn6KwFj83grW3cy2PbrE""",numeric_test_14,01/03/01_03_014.ifc,numeric_output_14,retrieve
+"Retrieve the net floor area in square meters of the room with GlobalId = ""3N9Z0YGDv8JuEhl24cnvVA""",numeric_test_01,01/03/01_03_001.ifc,numeric_output_01,retrieve
+"Retrieve the net floor area in square meters of all the rooms",numeric_test_02,01/03/01_03_002.ifc,numeric_output_02,retrieve
+"Retrieve the gross floor area in square meters of the second floor",numeric_test_03,01/03/01_03_003.ifc,numeric_output_03,retrieve
+"Retrieve the gross floor area in square meters of all storeys",numeric_test_04,01/03/01_03_004.ifc,numeric_output_04,retrieve
+"Retrieve the inner net wall area in square meters of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_05,01/03/01_03_005.ifc,numeric_output_05,retrieve
+"Retrieve the outer net wall area in square meters of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3hM"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_06,01/03/01_03_006.ifc,numeric_output_06,retrieve
+"Retrieve the inner net wall area in square meters of the walls with GlobalIds = [""37DacD4NnAp8bYABNd$pI9"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]",numeric_test_07,01/03/01_03_007.ifc,numeric_output_07,retrieve
+"Provide the outer net wall area in square meters of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3gT"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3hM""]",numeric_test_08,01/03/01_03_008.ifc,numeric_output_08,retrieve
+"Provide the outer gross wall area in square meters of the walls with GlobalIds = [""1YYXjRkjn7ywhxb576N3gT"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3nB"", ""1YYXjRkjn7ywhxb576N3hM""]",numeric_test_09,01/03/01_03_009.ifc,numeric_output_09,retrieve
+"Provide the inner gross wall area in square meters of the walls with GlobalIds = [""2DM19d52z3gAPlkXPTpJnG"", ""1YYXjRkjn7ywhxb576N3m0"", ""1YYXjRkjn7ywhxb576N3gT""]. At wall junctions, do not trim wall faces; for this L-shaped wall set, include intersecting wall areas.",numeric_test_10,01/03/01_03_010.ifc,numeric_output_10,retrieve
+"Provide the area of the openings in square meters that are larger than 2 sqm",numeric_test_11,01/03/01_03_011.ifc,numeric_output_11,retrieve
+"Calculate the combined width (in meters) of the openings with a sill",numeric_test_12,01/03/01_03_012.ifc,numeric_output_12,retrieve
+"Retrieve the length of all walls (in meters)",numeric_test_13,01/03/01_03_013.ifc,numeric_output_13,retrieve
+"Provide the area of the opening in square meters in the slab with GlobalId = ""3IVn6KwFj83grW3cy2PbrE""",numeric_test_14,01/03/01_03_014.ifc,numeric_output_14,retrieve
 "Take off number of all openings that are larger than 2 sqm",numeric_test_15,01/03/01_03_015.ifc,numeric_output_15,retrieve
-"Provide the volume of the openings in the slab with GlobalId = ""3IVn6KwFj83grW3cy2PbrE""",numeric_test_16,01/03/01_03_016.ifc,numeric_output_16,retrieve
-"Provide the net wall volume of all walls",numeric_test_17,01/03/01_03_017.ifc,numeric_output_17,retrieve
-"Take off net room volume of the non-rectangular room",numeric_test_18,01/03/01_03_018.ifc,numeric_output_18,retrieve
-"Calculate the net volume of all slabs",numeric_test_19,01/03/01_03_019.ifc,numeric_output_19,retrieve
-"Provide the perimeter of all rooms",numeric_test_20,01/03/01_03_020.ifc,numeric_output_20,retrieve
+"Provide the volume in cubic meters of the openings in the slab with GlobalId = ""3IVn6KwFj83grW3cy2PbrE""",numeric_test_16,01/03/01_03_016.ifc,numeric_output_16,retrieve
+"Provide the net wall volume in cubic meters of all walls",numeric_test_17,01/03/01_03_017.ifc,numeric_output_17,retrieve
+"Take off net room volume in cubic meters of the non-rectangular room",numeric_test_18,01/03/01_03_018.ifc,numeric_output_18,retrieve
+"Calculate the net volume in cubic meters of all slabs",numeric_test_19,01/03/01_03_019.ifc,numeric_output_19,retrieve
+"Provide the perimeter in cubic meters of all rooms",numeric_test_20,01/03/01_03_020.ifc,numeric_output_20,retrieve
 
 
 
