@@ -4,11 +4,11 @@ question,test,ifc-file,structured-output,CRUD
 "Add a door to the wall that is north (+Y direction) of the wall with GlobalId = ""3YQ$1CPXD2Mh2vQ18vV$hw""",geometry_test_03,01/01/01_01_003.ifc,,create
 "Insert a room (IfcSpace) to the area that is left of the column with GlobalId = ""3A5GfH23DBvBYpavCfWh4z""",geometry_test_04,01/01/01_01_004.ifc,,create
 "Create a wall with a length of 5m starting at point (10,5) pointing to direction (1,0)",geometry_test_05,empty.ifc,,create
-"Provide length (longest side) of the room that does not have the shape of a square",geometry_test_06,01/01/01_01_006.ifc,geom_output_06,retrieve
+"Provide length (longest side) in meters of the room that does not have the shape of a square",geometry_test_06,01/01/01_01_006.ifc,geom_output_06,retrieve
 "Provide id of the wall that is the shortest",geometry_test_07,01/01/01_01_007.ifc,geom_output_07,retrieve
-"Provide the distance between the longest walls",geometry_test_08,01/01/01_01_008.ifc,geom_output_08,retrieve
+"Provide the distance between the longest walls in meters",geometry_test_08,01/01/01_01_008.ifc,geom_output_08,retrieve
 "Provide the ids of the walls that shape a triangle",geometry_test_09,01/01/01_01_009.ifc,geom_output_09,retrieve
-"Provide total inner length of the two walls with GlobalId = ""38GaXhC7P9afGO$ddCnYtE"" and GlobalId = ""38GaXhC7P9afGO$ddCnYr0""",geometry_test_10,01/01/01_01_010.ifc,geom_output_10,retrieve
+"Provide total inner length (in meters) of the two walls with GlobalId = ""38GaXhC7P9afGO$ddCnYtE"" and GlobalId = ""38GaXhC7P9afGO$ddCnYr0""",geometry_test_10,01/01/01_01_010.ifc,geom_output_10,retrieve
 "Decrease the height of all walls by 0.5 m on the 2nd storey",geometry_test_11,01/01/01_01_011.ifc,,update
 "Rotate wall by +45° around its center which is parallel to wall with GlobalId = ""1$zxNs50z3OeFBpABtoN40""",geometry_test_12,01/01/01_01_012.ifc,,update
 "Move the window by 3m along the x axis which is wider than 1.50m",geometry_test_13,01/01/01_01_013.ifc,,update
