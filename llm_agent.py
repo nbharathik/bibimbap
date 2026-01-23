@@ -478,6 +478,7 @@ class State(TypedDict):
     output_tokens: int
     tool_call_iterations: List[dict]
     filtered_tools: list
+    sample_timeout: int
 
 
 async def main():
@@ -653,6 +654,7 @@ async def main():
         ifc_file_path = state["ifc_file_path"]
         structured_output = state["structured_output"]
         filtered_tools = state.get("filtered_tools", tools)
+        sample_timeout = int(state.get("sample_timeout", 300))
 
         agent = (
             create_agent(model, filtered_tools, response_format=ToolStrategy(structured_output))
@@ -691,47 +693,55 @@ async def main():
         tool_calls_seen = 0
 
         chain = []
+        fatal_error: str | None = None
         try:
-            async for event in agent.astream_events(
-                {
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ]
-                },
-                config={"callbacks": [usage_cb]} if usage_cb is not None else None,
-            ):
-                if isinstance(event, dict):
-                    etype = event.get("event")
-                    name = event.get("name")
+            try:
+                async with asyncio.timeout(sample_timeout):
+                    async for event in agent.astream_events(
+                        {
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_content},
+                            ]
+                        },
+                        config={"callbacks": [usage_cb]} if usage_cb is not None else None,
+                    ):
+                        if isinstance(event, dict):
+                            etype = event.get("event")
+                            name = event.get("name")
 
-                    if etype == "on_chat_model_stream" and not got_stream:
-                        got_stream = True
-                        log("MODEL streaming started (first chunk received)")
+                            if etype == "on_chat_model_stream" and not got_stream:
+                                got_stream = True
+                                log("MODEL streaming started (first chunk received)")
+                                chain.append(event)
+                                continue
+
+                            if etype == "on_tool_start":
+                                tool_calls_seen += 1
+                                log(f"AGENT tool_start name={name} (#{tool_calls_seen})")
+
+                            if etype == "on_tool_end":
+                                log(f"AGENT tool_end name={name}")
+
+                            if etype == "on_tool_error":
+                                log(f"AGENT tool_error name={name} data={_truncate(event.get('data', {}))}")
+
+                            log_event(event)
+
+                            if etype == "on_tool_end" and name == "execute_ifc_code":
+                                out = _parse_tool_end_output(event)
+                                if isinstance(out, dict) and out.get("error") in (
+                                    "SUBPROCESS_CRASH",
+                                    "SUBPROCESS_TIMEOUT",
+                                ):
+                                    fatal_error = f"IFC_TOOL_FATAL: {out}"
+                                    break
+
                         chain.append(event)
-                        continue
-
-                    if etype == "on_tool_start":
-                        tool_calls_seen += 1
-                        log(f"AGENT tool_start name={name} (#{tool_calls_seen})")
-
-                    if etype == "on_tool_end":
-                        log(f"AGENT tool_end name={name}")
-
-                    if etype == "on_tool_error":
-                        log(f"AGENT tool_error name={name} data={_truncate(event.get('data', {}))}")
-
-                    log_event(event)
-
-                    if etype == "on_tool_end" and name == "execute_ifc_code":
-                        out = _parse_tool_end_output(event)
-                        if isinstance(out, dict) and out.get("error") in (
-                            "SUBPROCESS_CRASH",
-                            "SUBPROCESS_TIMEOUT",
-                        ):
-                            raise RuntimeError(f"IFC_TOOL_FATAL: {out}")
-
-                chain.append(event)
+            except TimeoutError:
+                fatal_error = f"SAMPLE_TIMEOUT_AFTER_{sample_timeout}s"
+            except Exception as exc:
+                fatal_error = f"MODEL_EXCEPTION: {exc}"
         finally:
             if hb:
                 hb.cancel()
@@ -848,6 +858,7 @@ async def main():
             "tool_call_iterations": tool_call_iterations,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "error": fatal_error,
         }
 
     builder = StateGraph(State)
@@ -913,16 +924,15 @@ async def main():
                 "structured_output": output_object,
                 "ifc_file_path": str(edited_ifc_path.resolve()),
                 "filtered_tools": tools,
+                "sample_timeout": int(args.sample_timeout),
             }
 
             try:
-                result_state = await asyncio.wait_for(
-                    graph.ainvoke(model_args, config={"recursion_limit": 15}),
-                    timeout=int(args.sample_timeout),
-                )
+                result_state = await graph.ainvoke(model_args, config={"recursion_limit": 15})
                 log(f"  SAMPLE {sample + 1} model done in {time.time() - t0:.1f}s")
             except Exception as exc:
                 log(f"  SAMPLE {sample + 1} ERROR after {time.time() - t0:.1f}s: {exc}")
+                # call_model now returns errors via result_state, so this except should be rarer
                 sample_results.append(
                     {
                         "sample": sample + 1,
@@ -957,6 +967,7 @@ async def main():
                     "score": sum(metrics.values()) / len(metrics) if metrics else 0,
                     "input_tokens": result_state["input_tokens"],
                     "output_tokens": result_state["output_tokens"],
+                    "error": result_state.get("error"),
                 }
             )
 
