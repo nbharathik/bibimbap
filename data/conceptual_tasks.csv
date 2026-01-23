@@ -1,0 +1,21 @@
+question,test,ifc-file,structured-output,CRUD
+Provide the global id of the room whose surrounding walls are perceived as spatially soft.    ,conceptual_test_01,02/00/02_00_001.ifc,conceptual_output_01,retrieve
+Provide the global id of the wall that is geometrically limited when it extends along its alignment.,conceptual_test_02,02/00/02_00_002.ifc,conceptual_output_02,retrieve
+Provide the global id of the wall that is perceived as a freestanding wall within its spatial context.,conceptual_test_03,02/00/02_00_003.ifc,conceptual_output_03,retrieve
+Provide the perceivable maximum spatial volume in cubic meters that emerges from the elements.,conceptual_test_04,02/00/02_00_004.ifc,conceptual_output_04,retrieve
+Provide the global id of the room that is perceived as more introverted.,conceptual_test_05,02/00/02_00_005.ifc,conceptual_output_05,retrieve
+Provide the global id of the room that acts as the corridor.,conceptual_test_06,02/00/02_00_006.ifc,conceptual_output_06,retrieve
+Provide the global ids of the doors on the shortest path from the room with global id 3E$cYc__TFSxk95ilJEp_R to the room with global id 3E$cYc__TFSxk95ilJEp_I.,conceptual_test_07,02/00/02_00_007.ifc,conceptual_output_07,retrieve
+Provide the global id of the room that serves as a radial hub.,conceptual_test_08,03/00/02_00_008.ifc,conceptual_output_08,retrieve
+Provide the global id of the room that acts as a room inside a room.,conceptual_test_09,04/00/02_00_009.ifc,conceptual_output_09,retrieve
+Provide the global id of the room that is perceived as a semi-public-space.,conceptual_test_10,05/00/02_00_010.ifc,conceptual_output_10,retrieve
+"Provide the global id of the element, that enables a visual and spatial connection between the ground floor and the first floor.",conceptual_test_11,06/00/02_00_011.ifc,conceptual_output_11,retrieve
+Provide the global id of the room that appears brighter based on visual perception.,conceptual_test_12,07/00/02_00_012.ifc,conceptual_output_12,retrieve
+Provide the global id of the wall that tend to be in the darkest part of the room.,conceptual_test_13,08/00/02_00_013.ifc,conceptual_output_13,retrieve
+Provide the global id of the room that has spatial elements which create an indirect illumination.,conceptual_test_14,09/00/02_00_014.ifc,conceptual_output_14,retrieve
+Provide the global id of the wall that is perceived as intentionally designed to receive a vertical light gradient across its surface.,conceptual_test_15,10/00/02_00_015.ifc,conceptual_output_15,retrieve
+Provide the global ids of the rooms that acts as an support room to its correspnding main room.,conceptual_test_16,11/00/02_00_016.ifc,conceptual_output_16,retrieve
+Provide the global id of the room that acts as the central axis in its context.,conceptual_test_17,12/00/02_00_017.ifc,conceptual_output_17,retrieve
+Provide the number of horizontal facade articulation zones in the south elevation. South means -y direction.,conceptual_test_18,13/00/02_00_018.ifc,conceptual_output_18,retrieve
+Provide the global id of the door that is perceived as the entrence.,conceptual_test_19,14/00/02_00_019.ifc,conceptual_output_19,retrieve
+Provide the global id of the element that hinders the axial connection of view in the sequence of rooms.,conceptual_test_20,15/00/02_00_020.ifc,conceptual_output_20,retrieve
