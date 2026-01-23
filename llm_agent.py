@@ -895,21 +895,18 @@ async def main():
         is_retrieve = crud_value == "retrieve"
 
         edited_question_directory: Path | None = None
-        if not is_retrieve:
-            edited_question_directory = edited_ifc_directory / str(question_id)
-            edited_question_directory.mkdir(parents=True, exist_ok=True)
+        edited_question_directory = edited_ifc_directory / str(question_id)
+        edited_question_directory.mkdir(parents=True, exist_ok=True)
+
 
         sample_results = []
         for sample in range(num_samples):
             log(f"  SAMPLE {sample + 1}/{num_samples} start")
             t0 = time.time()
 
-            if is_retrieve:
-                edited_ifc_path = ifc_path
-            else:
-                ifc_stem = Path(row["ifc-file"]).stem
-                edited_ifc_path = edited_question_directory / f"{ifc_stem}_{sample}.ifc"
-                shutil.copyfile(ifc_path, edited_ifc_path)
+            ifc_stem = Path(row["ifc-file"]).stem
+            edited_ifc_path = edited_question_directory / f"{ifc_stem}_{sample}.ifc"
+            shutil.copyfile(ifc_path, edited_ifc_path)
 
             model_args = {
                 "prompt": prompt,
