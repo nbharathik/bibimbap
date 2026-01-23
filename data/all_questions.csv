@@ -4,25 +4,21 @@ Create a door with the size of 2 by 1 meters in the wall with id 2UsXAbj6n0fwEWq
 Add an opening of size 5 by 5 meters to the center of the slab with id 11kJIqz$n2Jf_DfJV1SCVP.,test_03,basic_tasks.ifc,,create
 "Insert a column with the height of 3m in (12, 8).",test_04,basic_tasks.ifc,,create
 "Add a wall with a length of 15m beginning in (0, -10).",test_05,basic_tasks.ifc,,create
-,,,,
 Provide the area in square meters of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_06,basic_tasks.ifc,output_06,retrieve
 Take off the length in meters of the wall with id 22hyxvAPr65PFt9WZfHSKC.,test_07,basic_tasks.ifc,output_07,retrieve
 Provide the volume in cubic meters of the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_08,basic_tasks.ifc,output_08,retrieve
 "Provide the distance in meters, center to center, of the columns with ids 22hyxvAPr65PFt9WZfHSMr and 22hyxvAPr65PFt9WZfHSMu.",test_09,basic_tasks.ifc,output_09,retrieve
 Provide the global id of the wall that has a length of 5m.,test_10,basic_tasks.ifc,output_10,retrieve
-,,,,
 Rotate the wall with id 22hyxvAPr65PFt9WZfHSP3 by +90 degree around the z axis.,test_11,basic_tasks.ifc,,update
 Move the door by one meter in direction of x in the wall with id 11kJIqz$n2Jf_DfJV1SDYu.,test_12,basic_tasks.ifc,,update
 Increase the height by 0.5 meters of the window with id 11kJIqz$n2Jf_DfJV1SDbS.,test_13,basic_tasks.ifc,,update
 Decrease the height by 0.5 meters of the slab with the id 11kJIqz$n2Jf_DfJV1SCVP.,test_14,basic_tasks.ifc,,update
 Move the column eith id 22hyxvAPr65PFt9WZfHSMu by -3 meters in direction of y.,test_15,basic_tasks.ifc,,update
-,,,,
 Delete the column with the id 22hyxvAPr65PFt9WZfHS2x.,test_16,basic_tasks.ifc,,delete
 Remove the door with id 11kJIqz$n2Jf_DfJV1SDY7.,test_17,basic_tasks.ifc,,delete
 Delete the opening with id 0APGbZXNKfgPNB$VQQZ0pi.,test_18,basic_tasks.ifc,,delete
 Remove the wall with id 2UsXAbj6n0fwEWqdkVuHyn.,test_19,basic_tasks.ifc,,delete
 Take out the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_20,basic_tasks.ifc,,delete
-,,,,
 "Create a slab that has a width of 0.2m and is placed on the upper outer edges of the four columns in the IFC file",geometry_test_01,01/01/01_01_001.ifc,,create
 "Create a column in the centroid of the four walls in this IFC file",geometry_test_02,01/01/01_01_002.ifc,,create
 "Add a door to the wall that is north (+Y direction) of the wall with GlobalId = ""3YQ$1CPXD2Mh2vQ18vV$hw""",geometry_test_03,01/01/01_01_003.ifc,,create
@@ -43,31 +39,26 @@ Take out the room with id 2UsXAbj6n0fwEWqdkVuHyo.,test_20,basic_tasks.ifc,,delet
 "Take out the windows that are in the west walls. +Y is north and +X is east direction.",geometry_test_18,01/01/01_01_018.ifc,,delete
 "Delete the two windows that are opposite to the wall with the id GlobalId = ""1mRYVM4YfFFBRkcbz1hHbM""",geometry_test_19,01/01/01_01_019.ifc,,delete
 "Delete the wall that is closest to the column with id GlobalId = ""0lwZAgQMb7yAIJTmmcGlwc"". Take midpoint of column to nearest edge of wall.",geometry_test_20,01/01/01_01_020.ifc,,delete
-,,,,
 "Add a wall to the room with the id 3_DHXxtdb3wRKlXgyMiH4s so that it gets fully enclosed",topological_test_01,01/02/01_02_001.ifc,,create
 "Insert a column to the inner sapace of the walls with ids 3_DHXxtdb3wRKlXgyMiHOP, 3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08",topological_test_02,01/02/01_02_002.ifc,,create
 "Insert a wall that separates the rooms with the ids 0rMMWWDi1E0Qbe7dlPjRaK, 0rMMWWDi1E0Qbe7dlPjRcx",topological_test_03,01/02/01_02_003.ifc,,create
 "Create a slab that closes the elements with the ids 3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiHOP 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08",topological_test_04,01/02/01_02_004.ifc,,create
 "Create a door in one of the existing walls so that it connects the inner space with the outdoor space.",topological_test_05,01/02/01_02_005.ifc,,create
-,,,,
 Provide the global id of the wall that separates the room with the ids 3Vyqk8cSj8TOuAk6zHUwKx and 3Vyqk8cSj8TOuAk6zHUwJB.,topological_test_06,01/02/01_02_006.ifc,topological_output_06,retrieve
 Provide the global ids of the slabs that close the room with the id 3Vyqk8cSj8TOuAk6zHUwKx.,topological_test_07,01/02/01_02_007.ifc,topological_output_07,retrieve
 Provide the global ids of the columns that touch the room with the id 3wugWiepr7zgNK68VeZIPn.,topological_test_08,01/02/01_02_008.ifc,topological_output_08,retrieve
 Provide the global id of the room that has no adjacency to the room with the id 1mbvTd20X72ePAvoaDnxNU.,topological_test_09,01/02/01_02_009.ifc,topological_output_09,retrieve
 Provide the global id of the room that is open to the exterior.,topological_test_10,01/02/01_02_010.ifc,topological_output_10,retrieve
-,,,,
 "Change the height of all columns so that they touch the slab with id 0dxtXCDSn2mfP92h$AiPMM",topological_test_11,01/02/01_02_011.ifc,,update
 "Shorten the length of the wall by 1m that is outside of the walls with ids 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc",topological_test_12,01/02/01_02_012.ifc,,update
 "Change	the position of the window with the id 0HbU4cYqD2SBtSJYoQ_eW1 so that its inner right side touches the outside of the wall with the id 0HbU4cYqD2SBtSJYoQ_eXK",topological_test_13,01/02/01_02_013.ifc,,update
 "Trim the beams so that they touch the wall with the id 1A1LNnHqHFQwR1jv6PQkyv",topological_test_14,01/02/01_02_014.ifc,,update
 "Change the position of the slab with id 0CJwXarnHAeA7eFXxxI_is that it lays on the slab with the id 0CJwXarnHAeA7eFXxxI_hO.",topological_test_15,01/02/01_02_015.ifc,,update
-,,,,
 "Remove the wall that touches both the walls with ids 3cmsjRvPb4wf9t15K203w_ and 3cmsjRvPb4wf9t15K203XR.",topological_test_16,01/02/01_02_016.ifc,,delete
 "Delete the columns that have no relationship with the slab with the id 2IIWDJ6bzEPxU4iXeUX9Z5.",topological_test_17,01/02/01_02_017.ifc,,delete
 "Delete the room that is enclosed by the walls with global ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV.",topological_test_18,01/02/01_02_018.ifc,,delete
 "Remove the column that is inside of the walls with the ids 3Vyqk8cSj8TOuAk6zHUwIV, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ",topological_test_19,01/02/01_02_019.ifc,,delete
 "Delete the columns that are outside of the rooms with global ids 08usg60IH8OxdvepHCDp6f, 08usg60IH8OxdvepHCDp6c.",topological_test_20,01/02/01_02_020.ifc,,delete
-,,,,
 "Retrieve the net floor area in square meters of the room with GlobalId = ""3N9Z0YGDv8JuEhl24cnvVA""",numeric_test_01,01/03/01_03_001.ifc,numeric_output_01,retrieve
 "Retrieve the net floor area in square meters of all the rooms",numeric_test_02,01/03/01_03_002.ifc,numeric_output_02,retrieve
 "Retrieve the gross floor area in square meters of the second floor",numeric_test_03,01/03/01_03_003.ifc,numeric_output_03,retrieve
@@ -88,7 +79,6 @@ Provide the global id of the room that is open to the exterior.,topological_test
 "Take off net room volume in cubic meters of the non-rectangular room",numeric_test_18,01/03/01_03_018.ifc,numeric_output_18,retrieve
 "Calculate the net volume in cubic meters of all slabs",numeric_test_19,01/03/01_03_019.ifc,numeric_output_19,retrieve
 "Provide the perimeter in cubic meters of all rooms",numeric_test_20,01/03/01_03_020.ifc,numeric_output_20,retrieve
-,,,,
 Provide the global id of the room whose surrounding walls are perceived as spatially soft.    ,conceptual_test_01,02/00/02_00_001.ifc,conceptual_output_01,retrieve
 Provide the global id of the wall that is geometrically limited when it extends along its alignment.,conceptual_test_02,02/00/02_00_002.ifc,conceptual_output_02,retrieve
 Provide the global id of the wall that is perceived as a freestanding wall within its spatial context.,conceptual_test_03,02/00/02_00_003.ifc,conceptual_output_03,retrieve
