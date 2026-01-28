@@ -1,0 +1,51 @@
+================================================================================
+RESULTS SUMMARY: run_2026-01-26_14-15-05
+================================================================================
+
+OVERALL STATISTICS
+--------------------------------------------------------------------------------
+Prompts: 100
+Samples: 100
+Avg Score: 24.28%
+Pass Rate: 14.00%
+Error Rate: 6.00%
+Avg Tool Calls: 2.480
+Tool Use Rate: 100.00%
+Avg Input Tokens: 10452.220
+Avg Output Tokens: 6582.410
+
+STATISTICS BY FILE CATEGORY
+--------------------------------------------------------------------------------
+       Source CSV  Prompts  Samples  Avg_Score  Pass_Rate  Error_Rate  Avg_Tool_Calls  Avg_Input_Tokens  Avg_Output_Tokens
+all_questions.csv      100      100   0.242833       0.14        0.06            2.48          10452.22            6582.41
+
+STATISTICS BY CRUD OPERATION
+--------------------------------------------------------------------------------
+CRUD Operation  Prompts  Samples  Avg_Score  Pass_Rate  Error_Rate  Avg_Tool_Calls  Avg_Input_Tokens  Avg_Output_Tokens
+        create       15       15   0.383333   0.066667    0.133333        2.533333      11462.866667        8343.466667
+        delete       15       15   0.546667   0.333333    0.266667        1.933333       7286.666667        5190.200000
+      retrieve       55       55   0.109091   0.109091    0.000000        2.818182      12221.709091        6796.654545
+        update       15       15   0.288889   0.133333    0.000000        1.733333       6119.000000        5428.000000
+
+STATISTICS BY FILE CATEGORY AND CRUD
+--------------------------------------------------------------------------------
+       Source CSV CRUD Operation  Prompts  Samples  Avg_Score  Pass_Rate  Error_Rate  Avg_Tool_Calls  Avg_Input_Tokens  Avg_Output_Tokens
+all_questions.csv         create       15       15   0.383333   0.066667    0.133333        2.533333      11462.866667        8343.466667
+all_questions.csv         delete       15       15   0.546667   0.333333    0.266667        1.933333       7286.666667        5190.200000
+all_questions.csv       retrieve       55       55   0.109091   0.109091    0.000000        2.818182      12221.709091        6796.654545
+all_questions.csv         update       15       15   0.288889   0.133333    0.000000        1.733333       6119.000000        5428.000000
+
+TOOLS USAGE SUMMARY
+--------------------------------------------------------------------------------
+       Tool Name  Times Used
+execute_ifc_code         248
+
+METRICS SUMMARY (OVERALL)
+--------------------------------------------------------------------------------
+              Metric  Count     Mean Success Rate
+integrity_constraint     42 0.457143        45.7%
+       object_exists     15 0.733333        73.3%
+   object_not_exists     15 0.746667        74.7%
+        right_answer     55 0.109091        10.9%
+    right_dimensions     30 0.166667        16.7%
+      right_location     30 0.200000        20.0%
