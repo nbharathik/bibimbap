@@ -16,11 +16,11 @@ Args:
   --force: Alias for recomputing all samples (default behavior).
 
 Examples:
-  python evaluate_cache.py path/to/results/run_..
-  python evaluate_cache.py --run-dir path/to/results/run_..
-  python evaluate_cache.py --cache path/to/cache_foo.json
-  python evaluate_cache.py --cache path/to/cache_foo.json --output cache_x_test.json
-  python evaluate_cache.py --cache path/to/cache_foo.json --only-missing
+  python eval_cache.py path/to/results/run_..
+  python eval_cache.py --run-dir path/to/results/run_..
+  python eval_cache.py --cache path/to/cache_foo.json
+  python eval_cache.py --cache path/to/cache_foo.json --output cache_x_test.json
+  python eval_cache.py --cache path/to/cache_foo.json --only-missing
 """
 
 import argparse
