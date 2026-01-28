@@ -9,3 +9,6 @@ results/
 *.pyc
 .vscode/
 bin_*
+/configs/**
+!/configs/**/
+!/configs/**/*example*

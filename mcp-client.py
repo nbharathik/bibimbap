@@ -1,7 +1,25 @@
+"""Simple script to run the IFC MCP benchmark.
+
+Usage:
+  python mcp-client.py --config configs/benchmark.config.json [--only-llm]
+
+How it works:
+  Loads a benchmark config, prepares questions, connects to IFC Bonsai MCP server
+  (use the 'benchmark-v1' branch of the MCP server), runs an LLM agent per question, 
+  and stores results in a run directory.
+  
+  Check how to use IFC Bonsai MCP here (https://github.com/Show2Instruct/ifc-bonsai-mcp)
+  Quick setup: Create a zip file for blender_addon, import into Blender addon in the plugin tab
+    click connect to MCP server. You are now run this benchmark.
+
+Args:
+  --config: path to JSON config (default: configs/benchmark.config.json)
+  --only-llm: skip evaluation step
+"""
+
 import argparse
 import asyncio
 import json
-import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -18,17 +36,165 @@ from datetime import datetime
 import shutil
 
 try:
-    # Universal token counting callback (aggregates across multi-step agent runs).
     from langchain_core.callbacks import get_usage_metadata_callback
-except Exception:  # pragma: no cover
+except Exception: 
     get_usage_metadata_callback = None
 
-# Load tool groups configuration
-def load_tool_groups(config_path: Path) -> dict:
-    """Load tool groups configuration from JSON file."""
+# Tool group definitions used to map CRUD operations to allowed MCP tool names
+TOOL_GROUPS_CONFIG = {
+    "tool_groups": {
+        "ANALYSIS_SCREENSHOTS": [
+            "capture_blender_window_screenshot",
+            "capture_blender_3dviewport_screenshot",
+        ],
+        "INSPECT_SCENE": [
+            "get_scene_info",
+            "get_ifc_scene_overview",
+        ],
+        "INSPECT_OBJECTS": [
+            "get_selected_objects",
+            "get_object_info",
+            "get_blender_object_info",
+        ],
+        "FILE_OPERATIONS": [
+            "load_ifc_file",
+            "load_ifc_from_json",
+        ],
+        "DISCOVER_COMMANDS": [
+            "list_blender_commands",
+        ],
+        "LOOKUP_TYPES_OPTIONS": [
+            "get_roof_types",
+            "get_stairs_types",
+            "get_door_operation_types",
+            "get_window_partition_types",
+        ],
+        "STYLES_READ": [
+            "list_styles",
+        ],
+        "STYLES_WRITE": [
+            "create_surface_style",
+            "create_pbr_style",
+            "apply_style_to_object",
+            "update_style",
+            "remove_style",
+        ],
+        "MESH_HELPERS": [
+            "list_ifc_entities",
+            "get_trimesh_examples",
+        ],
+        "CODE_EXEC": [
+            "execute_blender_code",
+            "execute_ifc_code_tool",
+        ],
+        "CREATE_ELEMENTS": [
+            "create_wall",
+            "create_two_point_wall",
+            "create_polyline_walls",
+            "create_roof",
+            "create_slab",
+            "create_door",
+            "create_window",
+            "create_stairs",
+            "create_trimesh_ifc",
+            "create_mesh_ifc",
+        ],
+        "UPDATE_ELEMENTS": [
+            "update_wall",
+            "update_roof",
+            "update_slab",
+            "update_door",
+            "update_window",
+            "update_stairs",
+        ],
+        "DELETE_ELEMENTS": [
+            "delete_roof",
+            "delete_stairs",
+        ],
+        "GET_PROPERTIES": [
+            "get_wall_properties",
+            "get_slab_properties",
+            "get_door_properties",
+            "get_window_properties",
+            "get_roof_properties",
+            "get_stairs_properties",
+        ],
+        "RAG_ANY": [
+            "ensure_ifc_knowledge_ready",
+            "search_ifc_knowledge",
+            "get_ifc_knowledge_status",
+            "find_ifc_function",
+            "get_ifc_module_info",
+            "get_ifc_function_details",
+            "clear_ifc_knowledge_cache",
+            "get_cache_statistics",
+        ],
+    },
+    "crud_operations": {
+        "create": [
+            "INSPECT_SCENE",
+            "INSPECT_OBJECTS",
+            "LOOKUP_TYPES_OPTIONS",
+            "MESH_HELPERS",
+            "CREATE_ELEMENTS",
+            "STYLES_WRITE",
+            "ANALYSIS_SCREENSHOTS",
+            "CODE_EXEC",
+            "RAG_ANY",
+        ],
+        "update": [
+            "INSPECT_SCENE",
+            "INSPECT_OBJECTS",
+            "GET_PROPERTIES",
+            "UPDATE_ELEMENTS",
+            "ANALYSIS_SCREENSHOTS",
+            "CODE_EXEC",
+            "RAG_ANY",
+            {
+                "inline_tools": [
+                    "apply_style_to_object",
+                    "update_style",
+                ],
+            },
+        ],
+        "retrieve": [
+            "ANALYSIS_SCREENSHOTS",
+            "INSPECT_SCENE",
+            "INSPECT_OBJECTS",
+            "FILE_OPERATIONS",
+            "DISCOVER_COMMANDS",
+            "LOOKUP_TYPES_OPTIONS",
+            "STYLES_READ",
+            "MESH_HELPERS",
+            "GET_PROPERTIES",
+            "CODE_EXEC",
+            "RAG_ANY",
+        ],
+        "delete": [
+            "INSPECT_SCENE",
+            "INSPECT_OBJECTS",
+            "DELETE_ELEMENTS",
+            "ANALYSIS_SCREENSHOTS",
+            "CODE_EXEC",
+            "RAG_ANY",
+            {
+                "inline_tools": [
+                    "remove_style",
+                ],
+            },
+        ],
+    },
+}
+
+# Load and normalize tool groups config
+def load_tool_groups(config_source) -> dict:
     try:
-        with config_path.open("r", encoding="utf-8") as f:
-            config = json.load(f)
+        if isinstance(config_source, Mapping):
+            config = config_source
+        else:
+            config_path = Path(config_source)
+            with config_path.open("r", encoding="utf-8") as f:
+                config = json.load(f)
         
         tool_groups = config["tool_groups"]
         crud_ops = config["crud_operations"]
@@ -49,6 +215,7 @@ def load_tool_groups(config_path: Path) -> dict:
         print("Using all available tools as fallback.")
         return {}
 
+# Typed dict representing the per-invocation state passed to the agent
 class State(TypedDict):
     prompt: str
     structured_output: object
@@ -57,6 +224,7 @@ class State(TypedDict):
     input_tokens: int
     output_tokens: int
     tool_call_iterations: List[dict]
+    recursion_error: bool
     filtered_tools: list
 
 def load_config(config_path: Path) -> dict:
@@ -76,48 +244,129 @@ def resolve_path(base_dir: Path, path_value: str) -> Path:
         return path
     return (base_dir / path).resolve()
 
+# Return suffix part of a model identifier (after ':')
 def model_suffix(model_name: str) -> str:
     return model_name.split(":")[-1]
 
+# Guidance passed to the agent about preferred tools and behavior
+TOOL_GUIDANCE = (
+    "Use the tool `execute_ifc_code_tool` for IFC inspection or calculations when possible. "
+    "Use other IFC/MCP tools only if they are the best fit for the task. "
+    "Avoid repeated tool calls with the same query. "
+    "When you have enough information, stop and return the final answer."
+)
 
-def check_mcp_connectivity_subprocess(repo_root: Path, config_path: Path) -> bool:
-    """Run standalone connectivity test. Returns True if connected, False otherwise."""
-    test_script = repo_root / "bin" / "test_mcp_connectivity.py"
+# Detect recursion-related exceptions for special handling
+def _is_recursion_error(exc: BaseException) -> bool:
+    if isinstance(exc, RecursionError):
+        return True
+    exc_name = type(exc).__name__.lower()
+    if "recursion" in exc_name:
+        return True
+    return "recursion" in str(exc).lower()
+
+# Phrases considered non-fatal vs fatal connection failure hints
+_CONNECTIVITY_NON_FATAL = (
+    "no ifc file loaded",
+    "no objects selected",
+)
+
+_CONNECTIVITY_FAILURE_HINTS = (
+    "could not connect",
+    "not connected",
+    "not connect",
+    "failed to connect",
+    "connection refused",
+    "connection to blender lost",
+    "connection error",
+    "communication error",
+    "socket timeout",
+    "socket error",
+    "timed out",
+    "timeout while",
+    "no module named 'bonsai'",
+    'no module named "bonsai"',
+)
+
+# Try to parse a string as JSON, return None if not JSON
+def _parse_json_if_possible(value: str):
     try:
-        result = subprocess.run(
-            ["python", str(test_script), "--config", str(config_path)],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        # Script prints "connect True" or "connect False"
-        output = result.stdout.strip()
-        is_connected = "connect True" in output
-        return is_connected
-    except subprocess.TimeoutExpired:
-        print("connect False")
-        return False
-    except Exception as exc:
-        print("connect False")
-        return False
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return None
+
+# Iterate over nested structures yielding all strings
+def _iter_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _iter_strings(item)
+    elif isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _iter_strings(item)
+
+# Check nested payloads for explicit error indicators
+def _payload_has_error(payload) -> bool:
+    if isinstance(payload, Mapping):
+        if payload.get("error") or payload.get("errors"):
+            return True
+        status = payload.get("status")
+        if isinstance(status, str) and status.lower() in {"error", "failed", "failure"}:
+            return True
+        success = payload.get("success")
+        if success is False:
+            return True
+        return any(_payload_has_error(v) for v in payload.values())
+    if isinstance(payload, (list, tuple, set)):
+        return any(_payload_has_error(v) for v in payload)
+    return False
+
+# Heuristic to decide if a probe result indicates a connection failure
+def _probe_result_indicates_failure(result) -> bool:
+    if result is None:
+        return True
+    parsed = None
+    if isinstance(result, str):
+        parsed = _parse_json_if_possible(result.strip())
+    payload = parsed if parsed is not None else result
+
+    strings = [s.lower() for s in _iter_strings(payload)]
+    has_nonfatal = any(
+        phrase in text for text in strings for phrase in _CONNECTIVITY_NON_FATAL
+    )
+
+    if _payload_has_error(payload) and not has_nonfatal:
+        return True
+
+    if not has_nonfatal and any(
+        phrase in text for text in strings for phrase in _CONNECTIVITY_FAILURE_HINTS
+    ):
+        return True
+
+    return False
 
 
+# Probe MCP server to ensure Blender connectivity and fail early if needed
 async def ensure_blender_connectivity(mcp_tools, probe_names=None, context_label="") -> None:
-    """Ping Blender MCP once; exit immediately if unreachable."""
     probe_names = probe_names or [
-        "get_ifc_scene_overview",
+        "list_blender_commands",
         "get_scene_info",
         "get_selected_objects",
+        "get_ifc_scene_overview",
     ]
-
-    probe_tool = next(
-        (
-            tool
-            for tool in mcp_tools
-            if any(tool.name == name or tool.name.endswith(name) for name in probe_names)
-        ),
-        None,
-    )
+    probe_tool = None
+    for name in probe_names:
+        probe_tool = next(
+            (
+                tool
+                for tool in mcp_tools
+                if tool.name == name or tool.name.endswith(name)
+            ),
+            None,
+        )
+        if probe_tool is not None:
+            break
 
     if probe_tool is None:
         msg = "No probe tool found to check Blender MCP connectivity. Aborting."
@@ -126,28 +375,18 @@ async def ensure_blender_connectivity(mcp_tools, probe_names=None, context_label
     try:
         result = await probe_tool.ainvoke({})
     except Exception as exc:
-        msg = f"Failed to reach Blender MCP server: {exc}"
+        label = f" ({context_label})" if context_label else ""
+        msg = f"Failed to reach Blender MCP server{label}: {exc}"
         print("connect False")
         raise SystemExit(msg)
 
-    # Inspect result payload for soft-fail signals.
-    if isinstance(result, dict):
-        if result.get("error") or result.get("errors"):
-            msg = f"Probe returned errors: {result}"
-            print("connect False")
-            raise SystemExit(msg)
-        if result.get("success") is False:
-            msg = f"Probe reported success=False: {result}"
-            print("connect False")
-            raise SystemExit(msg)
-    if isinstance(result, str):
-        lowered = result.lower()
-        if "could not connect" in lowered or "not connect" in lowered:
-            msg = f"Probe output suggests connection failure: {result}"
-            print("connect False")
-            raise SystemExit(msg)
+    if _probe_result_indicates_failure(result):
+        label = f" ({context_label})" if context_label else ""
+        msg = f"Probe output suggests connection failure{label}: {result}"
+        print("connect False")
+        raise SystemExit(msg)
 
-# TODO: catch errors while calling tools so that the benchmark does not end
+
 async def main():
     default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.json"
     parser = argparse.ArgumentParser(description="Run the IFC MCP benchmark.")
@@ -164,9 +403,7 @@ async def main():
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent
-    
-    tools_config_path = repo_root / "configs" / "mcp.tools.config.json"
-    TOOL_GROUPS = load_tool_groups(tools_config_path)
+    TOOL_GROUPS = load_tool_groups(TOOL_GROUPS_CONFIG)
 
     config_path = Path(args.config)
     if not config_path.is_absolute():
@@ -201,9 +438,6 @@ async def main():
     model_name = config["model_name"]
     model = init_chat_model(model_name)
 
-    # Best-effort: ensure token usage is included in streaming responses.
-    # Some providers (notably OpenAI) omit usage in streaming unless explicitly enabled.
-    # Claude does NOT support stream_options, so only set it for OpenAI models.
     try:
         if "openai" in model_name.lower():
             if hasattr(model, "stream_options"):
@@ -218,7 +452,6 @@ async def main():
                         mk["stream_options"] = {**so, "include_usage": True}
                         model.model_kwargs = mk
     except Exception:
-        # If the underlying model does not support this, fall back silently.
         pass
     system_prompt = config["system_prompt"]
 
@@ -229,40 +462,34 @@ async def main():
     results_dir = resolve_path(base_dir, paths_config["results_dir"])
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create a unique directory for this run
     run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_dir = results_dir / f"run_{run_timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f"Result for this run will be stored in: {run_dir}")
 
-    # Save a copy of the configuration for reproducibility
     with (run_dir / "config.json").open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
     results_config = config["results"]
     model_suffix_value = model_suffix(model_name)
     
-    # Cache file for THIS run
     cache_filename = results_config["cache_filename_template"].format(
         model_suffix=model_suffix_value
     )
     cache_path = run_dir / cache_filename
 
-    # Edited IFC directory for THIS run
     edited_ifc_dirname = results_config["edited_ifc_dir_template"].format(
         model_suffix=model_suffix_value
     )
     edited_ifc_directory = run_dir / edited_ifc_dirname
     edited_ifc_directory.mkdir(parents=True, exist_ok=True)
 
-    # Connect to MCP server and load tools
-    client = MultiServerMCPClient(
-        config["mcp_servers"]
-    )
+    client = MultiServerMCPClient(config["mcp_servers"])
     mcp_tools = await client.get_tools()
 
-    # Check MCP connectivity before processing any questions
-    if not check_mcp_connectivity_subprocess(repo_root, config_path):
+    try:
+        await ensure_blender_connectivity(mcp_tools, context_label="startup")
+    except SystemExit:
         raise SystemExit("MCP Plugin not reachable")
 
     load_ifc_tool = next(
@@ -275,8 +502,6 @@ async def main():
     )
 
     async def preload_ifc_in_blender(ifc_file_path: str) -> None:
-        """Load the IFC into Blender via MCP directly (no LLM tokens)."""
-
         if load_ifc_tool is None:
             print(
                 "Warning: MCP tool 'load_ifc_file' not found. "
@@ -293,22 +518,16 @@ async def main():
                 }
             )
         except Exception as exc:
-            # Do not crash the benchmark if Blender/MCP fails for one sample.
             print(f"Warning: Failed to preload IFC via MCP tool: {exc}")
 
     async def call_model(state: State):
-        """function that calls the model and writes the output to the state"""
-
-        # read prompt, structured output, ifc file path from state and initialize llm-agent
         prompt = state["prompt"]
         ifc_file_path = state["ifc_file_path"]
         structured_output = state["structured_output"]
         filtered_tools = state.get("filtered_tools", mcp_tools)
 
-        # Hard fail early if Blender MCP cannot be reached.
         await ensure_blender_connectivity(mcp_tools)
 
-        # Pre-load IFC into Blender without involving the LLM.
         await preload_ifc_in_blender(ifc_file_path)
 
         if structured_output:
@@ -316,14 +535,15 @@ async def main():
         else:
             agent = create_agent(model, filtered_tools)
 
-        # invoke agents
         if load_ifc_tool is None:
-            user_content = f"{prompt}\nThe ifc file path is {ifc_file_path}."
+            user_content = (
+                f"{prompt}\nThe ifc file path is {ifc_file_path}.\n\n{TOOL_GUIDANCE}"
+            )
         else:
-            user_content = f"{prompt}\n(The IFC file is already loaded in Blender.)"
+            user_content = (
+                f"{prompt}\n(The IFC file is already loaded in Blender.)\n\n{TOOL_GUIDANCE}"
+            )
 
-        # Collect events. If available, use LangChain's aggregated usage callback,
-        # which counts tokens across *all* underlying model calls (tool loops included).
         usage_cb_cm = None
         usage_cb = None
         if get_usage_metadata_callback is not None:
@@ -334,28 +554,31 @@ async def main():
                 usage_cb_cm = None
                 usage_cb = None
 
+        class _ErrorModelOutput:
+            def __init__(self, text: str):
+                self.error = text
+                self.raw_model_response = text
+
+        chain = []
+        caught_error = None
         try:
-            chain = [
-                event
-                async for event in agent.astream_events(
-                    {
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content},
-                        ]
-                    },
-                    config={"callbacks": [usage_cb]} if usage_cb is not None else None,
-                )
-            ]
+            async for event in agent.astream_events(
+                {
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ]
+                },
+                config={"callbacks": [usage_cb]} if usage_cb is not None else None,
+            ):
+                chain.append(event)
+        except Exception as exc:
+            caught_error = exc
         finally:
             if usage_cb_cm is not None:
                 usage_cb_cm.__exit__(None, None, None)
 
-        # retrieve outputs containing model output, tool calls and token uses
-        chain_end = chain[-1]
-
         def _extract_token_usage_from_message(msg) -> tuple[int, int]:
-            """Return (input_tokens, output_tokens) best-effort for a LangChain message."""
             usage = getattr(msg, "usage_metadata", None) or {}
             if isinstance(usage, Mapping) and usage:
                 in_tok = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
@@ -364,7 +587,6 @@ async def main():
 
             rm = getattr(msg, "response_metadata", None) or {}
             if isinstance(rm, Mapping) and rm:
-                # Some integrations put usage directly on response_metadata.
                 if any(
                     k in rm
                     for k in (
@@ -387,7 +609,6 @@ async def main():
             return 0, 0
 
         def _aggregate_token_usage_from_callback(cb) -> tuple[int, int] | None:
-            """Return (input_tokens, output_tokens) aggregated across agent run, or None."""
             if cb is None or not getattr(cb, "usage_metadata", None):
                 return None
             try:
@@ -401,8 +622,23 @@ async def main():
             except Exception:
                 return None
 
+        def _extract_messages_from_chain(events: list) -> list:
+            for event in reversed(events or []):
+                if isinstance(event, dict):
+                    messages = event.get("data", {}).get("output", {}).get("messages")
+                    if messages is not None:
+                        return messages
+            return []
+
+        def _extract_structured_response_from_chain(events: list):
+            for event in reversed(events or []):
+                if isinstance(event, dict):
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict) and "structured_response" in output:
+                        return output.get("structured_response")
+            return None
+
         def _parse_messages_for_output_and_tool_calls(msgs) -> tuple[str, list[dict], int, int]:
-            """Return (model_output, tool_call_iterations, parsed_in, parsed_out)."""
             model_out = ""
             parsed_in = parsed_out = 0
             iterations: list[dict] = []
@@ -418,21 +654,22 @@ async def main():
                     else None
                 )
 
-                if finish_reason == "tool_calls":
-                    tool_calls = []
-                    for tool_call in getattr(message, "tool_calls", []) or []:
-                        name = (
-                            tool_call.get("name")
-                            if isinstance(tool_call, dict)
-                            else getattr(tool_call, "name", None)
-                        )
-                        args = (
-                            tool_call.get("args")
-                            if isinstance(tool_call, dict)
-                            else getattr(tool_call, "args", None)
-                        )
-                        if name and name != "ModelOutput":
-                            tool_calls.append({"name": name, "args": args})
+                tool_calls = []
+                for tool_call in getattr(message, "tool_calls", []) or []:
+                    name = (
+                        tool_call.get("name")
+                        if isinstance(tool_call, dict)
+                        else getattr(tool_call, "name", None)
+                    )
+                    args = (
+                        tool_call.get("args")
+                        if isinstance(tool_call, dict)
+                        else getattr(tool_call, "args", None)
+                    )
+                    if name and name != "ModelOutput":
+                        tool_calls.append({"name": name, "args": args})
+
+                if tool_calls or finish_reason == "tool_calls":
                     iterations.append(
                         {
                             "tool_calls": tool_calls,
@@ -454,7 +691,7 @@ async def main():
         input_tokens = output_tokens = 0
         tool_call_iterations = []
 
-        messages = chain_end.get("data", {}).get("output", {}).get("messages", [])
+        messages = _extract_messages_from_chain(chain)
         (
             model_output,
             tool_call_iterations,
@@ -462,10 +699,10 @@ async def main():
             parsed_output_tokens,
         ) = _parse_messages_for_output_and_tool_calls(messages)
 
-        if "structured_response" in chain_end["data"]["output"].keys():
-            model_output = chain_end["data"]["output"]["structured_response"]
+        structured_response = _extract_structured_response_from_chain(chain)
+        if structured_response is not None:
+            model_output = structured_response
 
-        # Prefer callback totals if available (covers multi-step agent runs reliably).
         cb_totals = _aggregate_token_usage_from_callback(usage_cb)
         if cb_totals is not None:
             input_tokens, output_tokens = cb_totals
@@ -473,18 +710,32 @@ async def main():
             input_tokens = parsed_input_tokens
             output_tokens = parsed_output_tokens
 
+        if caught_error is not None:
+            err_text = f"ERROR during agent/tool run: {caught_error}"
+            if structured_output:
+                model_output = _ErrorModelOutput(err_text)
+            else:
+                model_output = f"{prompt}\n\n---AGENT ERROR---\n{err_text}"
+            return {
+                "model_output": model_output,
+                "tool_call_iterations": tool_call_iterations,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "recursion_error": _is_recursion_error(caught_error),
+                "error": str(caught_error),
+            }
+
         return {
             "model_output": model_output,
             "tool_call_iterations": tool_call_iterations,
             "input_tokens": input_tokens,
-            "output_tokens": output_tokens
+            "output_tokens": output_tokens,
+            "recursion_error": False,
         }
 
 
-    # Initialize cache
     cache = {}
     
-    # Load cache from source if specified
     cache_source = config.get("cache_source")
     cache_source_path = None
     if cache_source:
@@ -499,8 +750,8 @@ async def main():
                 print(f"Warning: Failed to load cache source {cache_source_path}: {e}")
                 print("Starting with empty cache.")
         else:
-             print(f"Warning: Cache source file not found: {cache_source_path}")
-             print("Starting with empty cache.")
+            print(f"Warning: Cache source file not found: {cache_source_path}")
+            print("Starting with empty cache.")
     else:
         print("No cache source specified. Starting with empty cache.")
 
@@ -515,7 +766,6 @@ async def main():
             except Exception as exc:
                 print(f"Warning: Failed to copy {edited_dir} to {dest_dir}: {exc}")
 
-    # build langchain graph
     builder = StateGraph(State)
     builder.add_node("call_model", call_model)
 
@@ -524,22 +774,19 @@ async def main():
 
     graph = builder.compile()
 
+# Simple state graph: START -> call_model -> END
 
-    # iterate over every prompt from the csv file
     for index, row in questions.iterrows():
         print(f"Processing question {int(str(index))+1} of {len(questions)}...")
         question_id = int(str(index))
 
-        # Fail fast per question before any work.
         await ensure_blender_connectivity(mcp_tools, context_label=f"question {question_id+1}")
 
-        # if prompt already processed, use the cached result
-        if str(question_id) in cache:
+        cache_key = str(question_id)
+        if cache_key in cache:
             print("Question already in cache. Using cached result.")
-            print(cache[str(question_id)])
             continue
 
-        # read the prompt, test, ifc file path, and structured output from the csv file
         prompt = row["question"]
         if pd.isna(prompt):
             print("Empty prompt. Skipping.")
@@ -547,7 +794,6 @@ async def main():
         test_path = f"{tests_module}.{row['test']}"
         ifc_path = ifc_dir / row["ifc-file"]
 
-        # load the structured output python object
         structured_output_cell = row.get("structured-output")
         structured_output_name = (
             str(structured_output_cell).strip()
@@ -565,30 +811,25 @@ async def main():
             crud_value = str(row["CRUD"]).strip().lower()
         is_retrieve = crud_value == "retrieve"
 
+        # Filter MCP tools by the allowed tool names for the configured CRUD operation
         allowed_tool_names = TOOL_GROUPS.get(crud_value, [])
         filtered_tools = [t for t in mcp_tools if any(t.name.endswith(name) for name in allowed_tool_names)] if allowed_tool_names else mcp_tools
-        # print(f"CRUD type: {crud_value}, Tools: {len(filtered_tools)}/{len(mcp_tools)}")
 
         edited_question_directory: Path | None = None
         if not is_retrieve:
-            # Only create per-question directories when we will write edited IFC files
             edited_question_directory = edited_ifc_directory / str(question_id)
             edited_question_directory.mkdir(parents=True, exist_ok=True)
      
-        # iterate over sample size and store results for every sample
         sample_results = []
         for sample in range(num_samples):
 
             if is_retrieve:
-                # Retrieval operations do not persist a new IFC file
                 edited_ifc_path = ifc_path
             else:
-                # Create a writable copy per sample for non-retrieval CRUD operations
                 ifc_stem = Path(row["ifc-file"]).stem
                 edited_ifc_path = edited_question_directory / f"{ifc_stem}_{sample}.ifc"
                 shutil.copyfile(ifc_path, edited_ifc_path)
 
-            # set the arguments for the LLM
             model_args = {
                 "prompt": prompt,
                 "structured_output": output_object,
@@ -596,7 +837,6 @@ async def main():
                 "filtered_tools": filtered_tools,
             }
 
-            # invoke LLM
             try:
                 result_state = await graph.ainvoke(
                     model_args,
@@ -617,18 +857,15 @@ async def main():
                 sample_results.append(sample_cache_object)
                 continue
 
-            # process structured output
             if output_object:
                 model_output = result_state["model_output"].__dict__
             else:
                 model_output = result_state["model_output"]
 
-            # load and execute test
             metrics = None
             score = None
             if evaluate:
                 test = importlib.import_module(test_path)
-                # now you can call test.execute_test() and retrieve the evaluation metrics
                 try:
                     metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
                 except Exception as exc:
@@ -636,19 +873,17 @@ async def main():
                     metrics = {}
                 score = sum(metrics.values()) / len(metrics) if metrics else 0
 
-            # store results for a sample
             sample_cache_object = {
                 "sample": sample + 1,
                 "model_output": model_output,
                 "tool_call_iterations": result_state["tool_call_iterations"],
-                "metrics": metrics, # dictionary of metrics (filled by evaluation script)
-                "score": score, # score is filled by evaluation script
+                "metrics": metrics,
+                "score": score,
                 "input_tokens": result_state["input_tokens"],
                 "output_tokens": result_state["output_tokens"]
             }
             sample_results.append(sample_cache_object)
 
-        # store results for a question
         cache_object = {
             "question_id": question_id,
             "prompt": prompt,
@@ -660,14 +895,10 @@ async def main():
             "timestamp": json.dumps(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         }
 
-        # store results in the cache
-        cache[question_id] = cache_object
+        cache[cache_key] = cache_object
 
         with cache_path.open("w", encoding="utf-8") as cache_file:
             json.dump(cache, cache_file)
-
-        # input("Please prepare open Blender file so that the next question can be processed. Press enter to continue.")
-        # for manually opening the right ifc file in blender
 
 
 if __name__ == "__main__":

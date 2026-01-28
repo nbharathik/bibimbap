@@ -1,8 +1,35 @@
-# llm_agent.py
+"""Run the IFC benchmark with a local tool-based code generation LLM agent.
+
+Usage:
+  python llm_agent.py [--config CONFIG] [--run-name NAME] [--resume-run DIR]
+                      [--start-index N] [--tool-timeout S] [--force-subprocess]
+                      [--verbose] [--sample-timeout S] [--quiet] [--llm-only]
+
+Example:
+    python llm_agent.py --config configs/benchmark.config.json --force-subprocess 
+    # other arguments are options, always use --force-subprocess
+
+Options:
+    --config CONFIG         Path to JSON config (default: configs/benchmark.config.json)
+    --run-name NAME         Suffix for new run folder
+    --resume-run DIR        Resume from existing run directory
+    --start-index N         Start at this question number (default: 1)
+    --tool-timeout S        Subprocess tool timeout (default: 45s)
+    --force-subprocess      Force subprocess for all tool calls
+    --verbose               Verbose logging
+    --sample-timeout S      Timeout for a single sample (default: 300s)
+    --quiet                 Only print warnings/errors
+    --llm-only              Run LLM only, skip tests/metrics
+
+Notes:
+    Use --force-subprocess for risky operations (e.g., geometry) to avoid crashes/timeouts.
+"""
 import argparse
+import ast
 import asyncio
 import contextlib
 import io
+import inspect
 import json
 import os
 import site
@@ -25,7 +52,6 @@ from langchain.chat_models import init_chat_model
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph, START, END
 
-# Subprocess isolation (for native crashes/timeouts)
 import subprocess
 import tempfile
 import textwrap
@@ -36,14 +62,27 @@ except Exception:  # pragma: no cover
     get_usage_metadata_callback = None
 
 
-# -----------------------------
-# Simple logging + heartbeat
-# -----------------------------
+LOG_LEVEL = "info"
+LOG_DEBUG = False
+
+
 def ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
 def log(msg: str) -> None:
+    if LOG_LEVEL == "error":
+        return
+    print(f"[{ts()}] {msg}", flush=True)
+
+
+def log_error(msg: str) -> None:
+    print(f"[{ts()}] {msg}", flush=True)
+
+
+def log_debug(msg: str) -> None:
+    if not LOG_DEBUG:
+        return
     print(f"[{ts()}] {msg}", flush=True)
 
 
@@ -54,14 +93,11 @@ async def heartbeat(label: str, every_s: int = 10):
         while True:
             await asyncio.sleep(every_s)
             i += 1
-            log(f"… still running ({label}) +{i*every_s}s")
+            log_debug(f"... still running ({label}) +{i*every_s}s")
     except asyncio.CancelledError:
         return
 
 
-# -----------------------------
-# Shared utilities
-# -----------------------------
 def strip_user_site() -> None:
     if os.environ.get("IFC_BENCHMARK_ALLOW_USER_SITE") == "1":
         return
@@ -103,7 +139,108 @@ def safe_jsonable(value):
         return str(value)
 
 
-# Logging (disable by default for speed)
+def _is_recursion_error(exc: BaseException) -> bool:
+    if isinstance(exc, RecursionError):
+        return True
+    exc_name = type(exc).__name__.lower()
+    if "recursion" in exc_name:
+        return True
+    return "recursion" in str(exc).lower()
+
+
+class QuotaExceededError(RuntimeError):
+    pass
+
+
+def _is_quota_error(exc: BaseException) -> bool:
+    patterns = (
+        "insufficient_quota",
+        "insufficient quota",
+        "quota exceeded",
+        "quota_exceeded",
+        "exceeded your current quota",
+        "resource_exhausted",
+    )
+    checked = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in checked:
+        checked.add(id(current))
+        msg = str(current).lower()
+        if any(p in msg for p in patterns):
+            return True
+        code = getattr(current, "code", None)
+        if code and "quota" in str(code).lower():
+            return True
+        status = getattr(current, "status_code", None) or getattr(current, "status", None)
+        if status in (402, 429) and "quota" in msg:
+            return True
+        current = getattr(current, "__cause__", None) or getattr(current, "__context__", None)
+    return False
+
+
+def _extract_metric_keys_from_test(test_module) -> list[str]:
+    func = getattr(test_module, "execute_test", None)
+    if func is None:
+        return []
+    try:
+        source = inspect.getsource(func)
+    except Exception:
+        return []
+    try:
+        tree = ast.parse(textwrap.dedent(source))
+    except Exception:
+        return []
+
+    def extract_keys(dict_node: ast.Dict) -> list[str]:
+        keys: list[str] = []
+        for key in dict_node.keys:
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                keys.append(key.value)
+            elif isinstance(key, ast.Str):
+                keys.append(key.s)
+        return keys
+
+    class MetricsVisitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.keys: list[str] = []
+
+        def visit_Assign(self, node: ast.Assign) -> None:
+            if self.keys:
+                return
+            if isinstance(node.value, ast.Dict):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "metrics":
+                        self.keys = extract_keys(node.value)
+                        return
+            self.generic_visit(node)
+
+        def visit_Return(self, node: ast.Return) -> None:
+            if self.keys:
+                return
+            if isinstance(node.value, ast.Dict):
+                self.keys = extract_keys(node.value)
+            self.generic_visit(node)
+
+    visitor = MetricsVisitor()
+    visitor.visit(tree)
+    return visitor.keys
+
+
+def default_metrics_from_test(test_module) -> dict:
+    keys = _extract_metric_keys_from_test(test_module)
+    return {key: False for key in keys} if keys else {}
+
+
+def execute_test_with_fallback(test_module, ifc_path: Path, edited_ifc_path: Path, model_output):
+    try:
+        metrics = test_module.execute_test(ifc_path, edited_ifc_path, model_output)
+        if isinstance(metrics, dict):
+            return metrics, ""
+        return {}, "invalid_metrics"
+    except Exception as exc:
+        return default_metrics_from_test(test_module), str(exc)
+
+
 VERBOSE_TOOL_LOGS = False
 VERBOSE_MAX_CHARS = 800
 
@@ -157,9 +294,6 @@ def _parse_tool_end_output(event: dict) -> dict | None:
     return None
 
 
-# -----------------------------
-# Tool: execute_ifc_code (HYBRID)
-# -----------------------------
 class ExecuteIFCCodeTool(BaseTool):
     """
     Hybrid execution:
@@ -175,11 +309,11 @@ class ExecuteIFCCodeTool(BaseTool):
         "and you can set `result` to return a value."
     )
 
-    # Pydantic fields (configurable)
     timeout_seconds: int = 45
     force_subprocess: bool = False
+    default_ifc_file_path: str | None = None
+    read_only: bool = False
 
-    # Pydantic-safe constants (NOT fields)
     RISKY_MARKERS: ClassVar[Tuple[str, ...]] = (
         "ifcopenshell.geom",
         "create_shape",
@@ -193,7 +327,7 @@ class ExecuteIFCCodeTool(BaseTool):
         c = code or ""
         return any(m in c for m in self.RISKY_MARKERS)
 
-    def _run_in_process(self, code: str, ifc_file_path: str) -> dict:
+    def _run_in_process(self, code: str, ifc_file_path: str, read_only: bool = False) -> dict:
         try:
             import ifcopenshell  # type: ignore
         except Exception as exc:
@@ -214,9 +348,20 @@ class ExecuteIFCCodeTool(BaseTool):
             ifc = ifcopenshell.open(ifc_file_path)
 
             def commit(path: str | None = None):
+                if read_only:
+                    return path or ifc_file_path
                 target = path or ifc_file_path
                 ifc.write(target)
                 return target
+
+            if read_only:
+                try:
+                    def _blocked_write(path: str | None = None):
+                        return path or ifc_file_path
+
+                    ifc.write = _blocked_write  # type: ignore[assignment]
+                except Exception:
+                    pass
 
             api = util = guid = element_util = None
             try:
@@ -270,7 +415,8 @@ class ExecuteIFCCodeTool(BaseTool):
                 "backend": "in_process",
             }
 
-    def _run_subprocess(self, code: str, ifc_file_path: str) -> dict:
+    def _run_subprocess(self, code: str, ifc_file_path: str, read_only: bool = False) -> dict:
+        # Inline runner executed in a subprocess for isolation and timeouts.
         runner = textwrap.dedent(
             r"""
             import json, io, traceback
@@ -286,6 +432,7 @@ class ExecuteIFCCodeTool(BaseTool):
             payload = json.loads(open(__PAYLOAD_PATH__, "r", encoding="utf-8").read())
             code = payload["code"]
             ifc_file_path = payload["ifc_file_path"]
+            read_only = bool(payload.get("read_only"))
 
             stdout_buf = io.StringIO()
             stderr_buf = io.StringIO()
@@ -309,9 +456,20 @@ class ExecuteIFCCodeTool(BaseTool):
                 ifc = ifcopenshell.open(ifc_file_path)
 
                 def commit(path=None):
+                    if read_only:
+                        return path or ifc_file_path
                     target = path or ifc_file_path
                     ifc.write(target)
                     return target
+
+                if read_only:
+                    try:
+                        def _blocked_write(path=None):
+                            return path or ifc_file_path
+
+                        ifc.write = _blocked_write
+                    except Exception:
+                        pass
 
                 api = util = guid = element_util = None
                 try:
@@ -371,7 +529,13 @@ class ExecuteIFCCodeTool(BaseTool):
         with tempfile.TemporaryDirectory() as td:
             payload_path = Path(td) / "payload.json"
             payload_path.write_text(
-                json.dumps({"code": code, "ifc_file_path": ifc_file_path}),
+                json.dumps(
+                    {
+                        "code": code,
+                        "ifc_file_path": ifc_file_path,
+                        "read_only": bool(read_only),
+                    }
+                ),
                 encoding="utf-8",
             )
             runner_code = runner.replace("__PAYLOAD_PATH__", repr(str(payload_path)))
@@ -384,7 +548,9 @@ class ExecuteIFCCodeTool(BaseTool):
                     timeout=self.timeout_seconds,
                 )
             except subprocess.TimeoutExpired as exc:
-                log(f"TOOL execute_ifc_code subprocess TIMEOUT after {self.timeout_seconds}s")
+                log_error(
+                    f"TOOL execute_ifc_code subprocess TIMEOUT after {self.timeout_seconds}s"
+                )
                 return {
                     "status": "error",
                     "error": "SUBPROCESS_TIMEOUT",
@@ -428,61 +594,71 @@ class ExecuteIFCCodeTool(BaseTool):
                     "backend": "subprocess",
                 }
 
-    def _run(self, code: str, ifc_file_path: str) -> dict:
+    def _run(self, code: str, ifc_file_path: str | None = None) -> dict:
+        ifc_path = ifc_file_path or self.default_ifc_file_path
+        if not ifc_path:
+            return {
+                "status": "error",
+                "error": "Missing ifc_file_path",
+                "traceback": "",
+                "stdout": "",
+                "stderr": "",
+                "result": None,
+                "backend": "in_process",
+            }
         started = time.time()
+        read_only = bool(self.read_only)
         force = self.force_subprocess or os.environ.get("IFC_BENCHMARK_FORCE_SUBPROCESS") == "1"
         risky = self._looks_risky(code)
         backend = "subprocess" if (force or risky) else "in_process"
 
-        log(
+        log_debug(
             f"TOOL execute_ifc_code start backend={backend} risky={risky} "
-            f"ifc={Path(ifc_file_path).name}"
+            f"ifc={Path(ifc_path).name}"
         )
 
         try:
             out = (
-                self._run_subprocess(code, ifc_file_path)
+                self._run_subprocess(code, ifc_path, read_only=read_only)
                 if backend == "subprocess"
-                else self._run_in_process(code, ifc_file_path)
+                else self._run_in_process(code, ifc_path, read_only=read_only)
             )
         except Exception as exc:
-            log(f"TOOL execute_ifc_code exception after {time.time()-started:.1f}s: {exc}")
+            log_error(f"TOOL execute_ifc_code exception after {time.time()-started:.1f}s: {exc}")
             raise
 
         dur = time.time() - started
         status = out.get("status")
         err = out.get("error")
-        log(f"TOOL execute_ifc_code end status={status} dur={dur:.1f}s error={err}")
+        log_debug(f"TOOL execute_ifc_code end status={status} dur={dur:.1f}s error={err}")
 
         if err in ("SUBPROCESS_TIMEOUT", "SUBPROCESS_CRASH", "INVALID_SUBPROCESS_JSON", "EMPTY_SUBPROCESS_OUTPUT"):
             so = (out.get("stdout") or "")[:800]
             se = (out.get("stderr") or "")[:800]
-            log(f"TOOL execute_ifc_code diagnostic stdout[:800]={so!r}")
-            log(f"TOOL execute_ifc_code diagnostic stderr[:800]={se!r}")
+            log_debug(f"TOOL execute_ifc_code diagnostic stdout[:800]={so!r}")
+            log_debug(f"TOOL execute_ifc_code diagnostic stderr[:800]={se!r}")
 
         return out
 
-    async def _arun(self, code: str, ifc_file_path: str) -> dict:
+    async def _arun(self, code: str, ifc_file_path: str | None = None) -> dict:
         return await asyncio.to_thread(self._run, code=code, ifc_file_path=ifc_file_path)
 
 
-# -----------------------------
-# Benchmark state + runner
-# -----------------------------
 class State(TypedDict):
     prompt: str
     structured_output: object
     ifc_file_path: str
+    read_only: bool
     model_output: str
     input_tokens: int
     output_tokens: int
     tool_call_iterations: List[dict]
+    recursion_error: bool
     filtered_tools: list
-    sample_timeout: int
 
 
 async def main():
-    global VERBOSE_TOOL_LOGS
+    global VERBOSE_TOOL_LOGS, LOG_LEVEL, LOG_DEBUG
 
     strip_user_site()
 
@@ -521,9 +697,22 @@ async def main():
         default=300,
         help="Hard timeout in seconds for a single sample (default: 300).",
     )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Only print warnings/errors.",
+    )
+    parser.add_argument(
+        "--llm-only",
+        action="store_true",
+        help="Run LLM only and skip tests/metrics (evaluate later with evaluate_cache.py).",
+    )
     args = parser.parse_args()
 
     VERBOSE_TOOL_LOGS = bool(args.verbose)
+    llm_only = bool(args.llm_only)
+    LOG_DEBUG = bool(args.verbose) and not bool(args.quiet)
+    LOG_LEVEL = "error" if args.quiet else "info"
 
     repo_root = Path(__file__).resolve().parent
 
@@ -542,28 +731,35 @@ async def main():
     f_list = questions_val if isinstance(questions_val, list) else [questions_val]
     if not f_list:
         raise SystemExit("Config 'questions_csv' must be a path or a non-empty list of paths.")
-    questions = pd.concat(
-        [pd.read_csv(resolve_path(base_dir, f)) for f in f_list],
-        ignore_index=True,
-    )
+    questions_list = []
+    for f in f_list:
+        if not f:
+            continue
+        csv_path = resolve_path(base_dir, f)
+        df = pd.read_csv(csv_path)
+        df["source_csv"] = Path(f).name
+        questions_list.append(df)
+    if not questions_list:
+        raise SystemExit("No question CSV files found to load.")
+    questions = pd.concat(questions_list, ignore_index=True)
 
     num_samples = config["num_samples"]
     model_name = config["model_name"]
     model = init_chat_model(model_name)
 
-    # Best-effort: include usage in streaming
     try:
-        if hasattr(model, "stream_options"):
-            existing = getattr(model, "stream_options") or {}
-            if isinstance(existing, dict):
-                model.stream_options = {**existing, "include_usage": True}
-        if hasattr(model, "model_kwargs"):
-            mk = getattr(model, "model_kwargs") or {}
-            if isinstance(mk, dict):
-                so = mk.get("stream_options") or {}
-                if isinstance(so, dict):
-                    mk["stream_options"] = {**so, "include_usage": True}
-                    model.model_kwargs = mk
+        if "openai" in model_name.lower():
+            if hasattr(model, "stream_options"):
+                existing = getattr(model, "stream_options") or {}
+                if isinstance(existing, dict):
+                    model.stream_options = {**existing, "include_usage": True}
+            if hasattr(model, "model_kwargs"):
+                mk = getattr(model, "model_kwargs") or {}
+                if isinstance(mk, dict):
+                    so = mk.get("stream_options") or {}
+                    if isinstance(so, dict):
+                        mk["stream_options"] = {**so, "include_usage": True}
+                        model.model_kwargs = mk
     except Exception:
         pass
 
@@ -576,7 +772,6 @@ async def main():
     results_dir = resolve_path(base_dir, paths_config["results_dir"])
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # run_dir: new or resume
     resume_run = (args.resume_run or "").strip()
     if resume_run:
         run_dir = Path(resume_run).expanduser().resolve()
@@ -615,8 +810,8 @@ async def main():
             log(f"Loaded existing cache from: {cache_path}")
             log(f"Cache contains {len(cache)} entries.")
         except Exception as e:
-            log(f"Warning: Failed to load existing cache {cache_path}: {e}")
-            log("Starting with empty cache.")
+            log_error(f"Warning: Failed to load existing cache {cache_path}: {e}")
+            log_error("Starting with empty cache.")
     else:
         cache_source = config.get("cache_source")
         if cache_source:
@@ -628,13 +823,13 @@ async def main():
                     log(f"Loaded existing cache from: {cache_source_path}")
                     log(f"Cache contains {len(cache)} entries.")
                 except Exception as e:
-                    log(f"Warning: Failed to load cache source {cache_source_path}: {e}")
-                    log("Starting with empty cache.")
+                    log_error(f"Warning: Failed to load cache source {cache_source_path}: {e}")
+                    log_error("Starting with empty cache.")
             else:
-                log(f"Warning: Cache source file not found: {cache_source_path}")
-                log("Starting with empty cache.")
+                log_error(f"Warning: Cache source file not found: {cache_source_path}")
+                log_error("Starting with empty cache.")
         else:
-            log("No cache source specified. Starting with empty cache.")
+            log_debug("No cache source specified. Starting with empty cache.")
 
     edited_ifc_dirname = results_config["edited_ifc_dir_template"].format(
         model_suffix=model_suffix_value
@@ -642,7 +837,6 @@ async def main():
     edited_ifc_directory = run_dir / edited_ifc_dirname
     edited_ifc_directory.mkdir(parents=True, exist_ok=True)
 
-    # tool
     execute_ifc_tool = ExecuteIFCCodeTool(
         timeout_seconds=int(args.tool_timeout),
         force_subprocess=bool(args.force_subprocess),
@@ -654,13 +848,23 @@ async def main():
         ifc_file_path = state["ifc_file_path"]
         structured_output = state["structured_output"]
         filtered_tools = state.get("filtered_tools", tools)
-        sample_timeout = int(state.get("sample_timeout", 300))
+        read_only = bool(state.get("read_only", False))
+
+        for tool in filtered_tools:
+            if isinstance(tool, ExecuteIFCCodeTool):
+                tool.default_ifc_file_path = ifc_file_path
+                tool.read_only = read_only
 
         agent = (
             create_agent(model, filtered_tools, response_format=ToolStrategy(structured_output))
             if structured_output
             else create_agent(model, filtered_tools)
         )
+
+        class _ErrorModelOutput:
+            def __init__(self, text: str):
+                self.error = text
+                self.raw = text
 
         user_content = (
             f"{prompt}\n\n"
@@ -684,74 +888,14 @@ async def main():
                 usage_cb_cm = None
                 usage_cb = None
 
-        log(
+        log_debug(
             f"MODEL start ifc={Path(ifc_file_path).name} "
             f"tools={len(filtered_tools)} structured={bool(structured_output)}"
         )
         hb = asyncio.create_task(heartbeat("model_stream", every_s=10))
         got_stream = False
         tool_calls_seen = 0
-
-        chain = []
-        fatal_error: str | None = None
-        try:
-            try:
-                async with asyncio.timeout(sample_timeout):
-                    async for event in agent.astream_events(
-                        {
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_content},
-                            ]
-                        },
-                        config={"callbacks": [usage_cb]} if usage_cb is not None else None,
-                    ):
-                        if isinstance(event, dict):
-                            etype = event.get("event")
-                            name = event.get("name")
-
-                            if etype == "on_chat_model_stream" and not got_stream:
-                                got_stream = True
-                                log("MODEL streaming started (first chunk received)")
-                                chain.append(event)
-                                continue
-
-                            if etype == "on_tool_start":
-                                tool_calls_seen += 1
-                                log(f"AGENT tool_start name={name} (#{tool_calls_seen})")
-
-                            if etype == "on_tool_end":
-                                log(f"AGENT tool_end name={name}")
-
-                            if etype == "on_tool_error":
-                                log(f"AGENT tool_error name={name} data={_truncate(event.get('data', {}))}")
-
-                            log_event(event)
-
-                            if etype == "on_tool_end" and name == "execute_ifc_code":
-                                out = _parse_tool_end_output(event)
-                                if isinstance(out, dict) and out.get("error") in (
-                                    "SUBPROCESS_CRASH",
-                                    "SUBPROCESS_TIMEOUT",
-                                ):
-                                    fatal_error = f"IFC_TOOL_FATAL: {out}"
-                                    break
-
-                        chain.append(event)
-            except TimeoutError:
-                fatal_error = f"SAMPLE_TIMEOUT_AFTER_{sample_timeout}s"
-            except Exception as exc:
-                fatal_error = f"MODEL_EXCEPTION: {exc}"
-        finally:
-            if hb:
-                hb.cancel()
-                with contextlib.suppress(Exception):
-                    await hb
-            if usage_cb_cm is not None:
-                usage_cb_cm.__exit__(None, None, None)
-
-        log("MODEL end (astream_events completed)")
-        chain_end = chain[-1] if chain else {}
+        tool_call_fallback: list[dict] = []
 
         def _extract_token_usage_from_message(msg) -> tuple[int, int]:
             usage = getattr(msg, "usage_metadata", None) or {}
@@ -794,57 +938,209 @@ async def main():
             parsed_in = parsed_out = 0
             iterations: list[dict] = []
 
+            def normalize_finish_reason(message) -> str | None:
+                rm = getattr(message, "response_metadata", None) or {}
+                raw = None
+                if isinstance(rm, Mapping):
+                    raw = rm.get("finish_reason") or rm.get("stop_reason")
+                if raw is None:
+                    raw = getattr(message, "finish_reason", None)
+                if raw is None:
+                    return None
+                return str(raw).lower()
+
             for message in msgs or []:
                 msg_input_tokens, msg_output_tokens = _extract_token_usage_from_message(message)
                 parsed_in += msg_input_tokens
                 parsed_out += msg_output_tokens
 
-                finish_reason = (
-                    message.response_metadata.get("finish_reason")
-                    if getattr(message, "response_metadata", None)
-                    else None
-                )
+                finish_reason = normalize_finish_reason(message)
 
-                if finish_reason == "tool_calls":
-                    tool_calls = []
-                    for tool_call in getattr(message, "tool_calls", []) or []:
-                        name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name", None)
-                        args = tool_call.get("args") if isinstance(tool_call, dict) else getattr(tool_call, "args", None)
-                        if name and name != "ModelOutput":
-                            tool_calls.append({"name": name, "args": args})
-                    iterations.append(
-                        {
-                            "tool_calls": tool_calls,
-                            "input_tokens": msg_input_tokens,
-                            "output_tokens": msg_output_tokens,
-                        }
-                    )
+                raw_tool_calls: list = []
+                tc_list = getattr(message, "tool_calls", None)
+                if isinstance(tc_list, list):
+                    raw_tool_calls.extend(tc_list)
+                elif tc_list:
+                    raw_tool_calls.append(tc_list)
+                single_tc = getattr(message, "tool_call", None)
+                if single_tc:
+                    raw_tool_calls.append(single_tc)
 
-                if finish_reason == "stop":
-                    model_out = message.content if getattr(message, "content", None) is not None else model_out
+                tool_calls = []
+                for tool_call in raw_tool_calls:
+                    if isinstance(tool_call, dict):
+                        name = tool_call.get("name") or tool_call.get("tool")
+                        args = tool_call.get("args") or tool_call.get("arguments")
+                    else:
+                        name = getattr(tool_call, "name", None)
+                        args = getattr(tool_call, "args", None) or getattr(tool_call, "arguments", None)
+                    if not name:
+                        continue
+                    if name == "ModelOutput":
+                        if isinstance(message.content, list) and message.content:
+                            first = message.content[0]
+                            if isinstance(first, dict) and "partial_json" in first:
+                                model_out = first.get("partial_json", model_out)
+                        continue
+                    tool_calls.append({"name": name, "args": args})
+
+                if finish_reason in ("tool_calls", "tool_call", "tool_use") or tool_calls:
+                    if tool_calls:
+                        iterations.append(
+                            {
+                                "tool_calls": tool_calls,
+                                "input_tokens": msg_input_tokens,
+                                "output_tokens": msg_output_tokens,
+                            }
+                        )
+
+                if finish_reason in ("stop", "end_turn", "length", "max_tokens"):
+                    content = message.content if getattr(message, "content", None) is not None else model_out
+                    if isinstance(content, list):
+                        text_parts = []
+                        for part in content:
+                            if isinstance(part, dict):
+                                if part.get("type") == "text" and "text" in part:
+                                    text_parts.append(part["text"])
+                                elif "text" in part:
+                                    text_parts.append(part["text"])
+                        if text_parts:
+                            model_out = "".join(text_parts)
+                    else:
+                        model_out = content
 
             return model_out, iterations, parsed_in, parsed_out
+
+        def _extract_messages_from_chain(events: list) -> list:
+            for event in reversed(events or []):
+                if isinstance(event, dict):
+                    messages = event.get("data", {}).get("output", {}).get("messages")
+                    if messages is not None:
+                        return messages
+            return []
+
+        def _extract_structured_response_from_chain(events: list):
+            for event in reversed(events or []):
+                if isinstance(event, dict):
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict) and "structured_response" in output:
+                        return output.get("structured_response")
+            return None
+
+        # Stream events to reconstruct output, tool calls, and token usage.
+        chain = []
+        try:
+            async for event in agent.astream_events(
+                {
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ]
+                },
+                config={"callbacks": [usage_cb]} if usage_cb is not None else None,
+            ):
+                if isinstance(event, dict):
+                    etype = event.get("event")
+                    name = event.get("name")
+
+                    if etype == "on_chat_model_stream" and not got_stream:
+                        got_stream = True
+                        log_debug("MODEL streaming started (first chunk received)")
+                        chain.append(event)
+                        continue
+
+                    if etype == "on_tool_start":
+                        tool_calls_seen += 1
+                        log_debug(f"AGENT tool_start name={name} (#{tool_calls_seen})")
+                        if name and name != "ModelOutput":
+                            data = event.get("data", {}) or {}
+                            args = data.get("input") or data.get("inputs")
+                            tool_call_fallback.append(
+                                {
+                                    "tool_calls": [{"name": name, "args": args}],
+                                    "input_tokens": 0,
+                                    "output_tokens": 0,
+                                }
+                            )
+
+                    if etype == "on_tool_end":
+                        log_debug(f"AGENT tool_end name={name}")
+
+                    if etype == "on_tool_error":
+                        log_error(f"AGENT tool_error name={name} data={_truncate(event.get('data', {}))}")
+                        if name and name != "ModelOutput":
+                            data = event.get("data", {}) or {}
+                            args = data.get("input") or data.get("inputs")
+                            tool_call_fallback.append(
+                                {
+                                    "tool_calls": [{"name": name, "args": args}],
+                                    "input_tokens": 0,
+                                    "output_tokens": 0,
+                                }
+                            )
+
+                    log_event(event)
+
+                    if etype == "on_tool_end" and name == "execute_ifc_code":
+                        out = _parse_tool_end_output(event)
+                        if isinstance(out, dict) and out.get("error") in (
+                            "SUBPROCESS_CRASH",
+                            "SUBPROCESS_TIMEOUT",
+                        ):
+                            raise RuntimeError(f"IFC_TOOL_FATAL: {out}")
+
+                chain.append(event)
+        except BaseException as exc:
+            if _is_quota_error(exc):
+                raise QuotaExceededError(str(exc)) from exc
+            err_text = "ERROR during agent/tool run:\n" + traceback.format_exc()
+            appended = f"{prompt}\n\n---AGENT ERROR---\n{err_text}"
+            tool_call_iterations = tool_call_fallback
+            if structured_output:
+                model_output = _ErrorModelOutput(appended)
+            else:
+                model_output = appended
+            cb_totals = _aggregate_token_usage_from_callback(usage_cb)
+            if cb_totals is not None:
+                input_tokens, output_tokens = cb_totals
+            else:
+                messages = _extract_messages_from_chain(chain)
+                _, _, parsed_input_tokens, parsed_output_tokens = (
+                    _parse_messages_for_output_and_tool_calls(messages)
+                )
+                input_tokens, output_tokens = parsed_input_tokens, parsed_output_tokens
+            return {
+                "model_output": model_output,
+                "tool_call_iterations": tool_call_iterations,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "recursion_error": _is_recursion_error(exc),
+                "error": str(exc),
+            }
+        finally:
+            if hb:
+                hb.cancel()
+                with contextlib.suppress(Exception):
+                    await hb
+            if usage_cb_cm is not None:
+                usage_cb_cm.__exit__(None, None, None)
+
+        log_debug("MODEL end (astream_events completed)")
 
         model_output = ""
         input_tokens = output_tokens = 0
         tool_call_iterations = []
 
-        messages = (
-            chain_end.get("data", {})
-            .get("output", {})
-            .get("messages", [])
-            if isinstance(chain_end, dict)
-            else []
-        )
+        messages = _extract_messages_from_chain(chain)
         model_output, tool_call_iterations, parsed_input_tokens, parsed_output_tokens = (
             _parse_messages_for_output_and_tool_calls(messages)
         )
+        if not tool_call_iterations and tool_call_fallback:
+            tool_call_iterations = tool_call_fallback
 
-        if (
-            isinstance(chain_end, dict)
-            and "structured_response" in chain_end.get("data", {}).get("output", {}).keys()
-        ):
-            model_output = chain_end["data"]["output"]["structured_response"]
+        structured_response = _extract_structured_response_from_chain(chain)
+        if structured_response is not None:
+            model_output = structured_response
 
         cb_totals = _aggregate_token_usage_from_callback(usage_cb)
         if cb_totals is not None:
@@ -858,7 +1154,7 @@ async def main():
             "tool_call_iterations": tool_call_iterations,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "error": fatal_error,
+            "recursion_error": False,
         }
 
     builder = StateGraph(State)
@@ -867,9 +1163,9 @@ async def main():
     builder.add_edge("call_model", END)
     graph = builder.compile()
 
-    # start-index is 1-based for humans
     start = max(int(args.start_index) - 1, 0)
 
+    stop_run = False
     for index in range(start, len(questions)):
         row = questions.iloc[index]
         question_id = int(index)
@@ -877,12 +1173,12 @@ async def main():
         log(f"QUESTION {index + 1}/{len(questions)} id={question_id} file={row.get('ifc-file')}")
 
         if str(question_id) in cache:
-            log(f"QUESTION id={question_id} already in cache, skipping.")
+            log_debug(f"QUESTION id={question_id} already in cache, skipping.")
             continue
 
         prompt = row["question"]
         if pd.isna(prompt):
-            log("Empty prompt. Skipping.")
+            log_error("Empty prompt. Skipping.")
             continue
 
         test_path = f"{tests_module}.{row['test']}"
@@ -906,76 +1202,134 @@ async def main():
         is_retrieve = crud_value == "retrieve"
 
         edited_question_directory: Path | None = None
-        edited_question_directory = edited_ifc_directory / str(question_id)
-        edited_question_directory.mkdir(parents=True, exist_ok=True)
+        if not is_retrieve:
+            edited_question_directory = edited_ifc_directory / str(question_id)
+            edited_question_directory.mkdir(parents=True, exist_ok=True)
 
 
         sample_results = []
         for sample in range(num_samples):
-            log(f"  SAMPLE {sample + 1}/{num_samples} start")
+            log_debug(f"  SAMPLE {sample + 1}/{num_samples} start")
             t0 = time.time()
 
-            ifc_stem = Path(row["ifc-file"]).stem
-            edited_ifc_path = edited_question_directory / f"{ifc_stem}_{sample}.ifc"
-            shutil.copyfile(ifc_path, edited_ifc_path)
+            if is_retrieve:
+                edited_ifc_path = ifc_path
+            else:
+                ifc_stem = Path(row["ifc-file"]).stem
+                edited_ifc_path = edited_question_directory / f"{ifc_stem}_{sample}.ifc"
+                shutil.copyfile(ifc_path, edited_ifc_path)
 
             model_args = {
                 "prompt": prompt,
                 "structured_output": output_object,
                 "ifc_file_path": str(edited_ifc_path.resolve()),
                 "filtered_tools": tools,
-                "sample_timeout": int(args.sample_timeout),
+                "read_only": is_retrieve,
             }
 
+            model_error = ""
             try:
-                result_state = await graph.ainvoke(model_args, config={"recursion_limit": 15})
-                log(f"  SAMPLE {sample + 1} model done in {time.time() - t0:.1f}s")
-            except Exception as exc:
-                log(f"  SAMPLE {sample + 1} ERROR after {time.time() - t0:.1f}s: {exc}")
-                # call_model now returns errors via result_state, so this except should be rarer
+                result_state = await asyncio.wait_for(
+                    graph.ainvoke(model_args, config={"recursion_limit": 15}),
+                    timeout=int(args.sample_timeout),
+                )
+                log_debug(f"  SAMPLE {sample + 1} model done in {time.time() - t0:.1f}s")
+            except QuotaExceededError as exc:
+                model_error = str(exc)
+                log_error(f"  SAMPLE {sample + 1} QUOTA exceeded: {exc}")
                 sample_results.append(
                     {
                         "sample": sample + 1,
-                        "model_output": "ERROR_OR_RECURSION_LIMIT_OR_TOOL_FATAL",
+                        "model_output": "ERROR_INSUFFICIENT_QUOTA",
                         "tool_call_iterations": [],
-                        "metrics": {},
-                        "score": 0,
+                        "metrics": None,
+                        "score": None,
                         "input_tokens": 0,
                         "output_tokens": 0,
-                        "error": str(exc),
+                        "error": model_error,
                     }
                 )
-                continue
-
-            model_output = result_state["model_output"].__dict__ if output_object else result_state["model_output"]
-
-            test = importlib.import_module(test_path)
-            t1 = time.time()
-            try:
-                metrics = test.execute_test(ifc_path, edited_ifc_path, model_output)
-                log(f"  SAMPLE {sample + 1} test done in {time.time() - t1:.1f}s metrics_keys={list(metrics.keys())}")
+                stop_run = True
+                break
             except Exception as exc:
-                log(f"  SAMPLE {sample + 1} test ERROR: {exc}")
-                metrics = {}
-
-            sample_results.append(
-                {
-                    "sample": sample + 1,
-                    "model_output": model_output,
-                    "tool_call_iterations": result_state["tool_call_iterations"],
-                    "metrics": metrics,
-                    "score": sum(metrics.values()) / len(metrics) if metrics else 0,
-                    "input_tokens": result_state["input_tokens"],
-                    "output_tokens": result_state["output_tokens"],
-                    "error": result_state.get("error"),
+                model_error = str(exc)
+                log_error(
+                    f"  SAMPLE {sample + 1} ERROR after {time.time() - t0:.1f}s: {exc}"
+                )
+                result_state = {
+                    "model_output": f"ERROR_OR_RECURSION_LIMIT_OR_TOOL_FATAL: {exc}",
+                    "tool_call_iterations": [],
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "recursion_error": _is_recursion_error(exc),
+                    "error": str(exc),
                 }
-            )
 
+            model_error = result_state.get("error") or model_error
+            raw_output = result_state["model_output"]
+            if output_object and hasattr(raw_output, "__dict__"):
+                model_output = raw_output.__dict__
+            else:
+                model_output = raw_output
+
+            metrics = None
+            score = None
+            if llm_only:
+                log_debug(f"  SAMPLE {sample + 1} llm-only: skipping tests")
+            else:
+                test = importlib.import_module(test_path)
+                t1 = time.time()
+                metrics, test_error = execute_test_with_fallback(
+                    test, ifc_path, edited_ifc_path, model_output
+                )
+                if test_error:
+                    log_error(f"  SAMPLE {sample + 1} test ERROR: {test_error}")
+                log_debug(
+                    f"  SAMPLE {sample + 1} test done in "
+                    f"{time.time() - t1:.1f}s metrics_keys={list(metrics.keys())}"
+                )
+                score = sum(metrics.values()) / len(metrics) if metrics else 0
+
+            sample_result = {
+                "sample": sample + 1,
+                "model_output": model_output,
+                "tool_call_iterations": result_state["tool_call_iterations"],
+                "metrics": metrics,
+                "score": score,
+                "input_tokens": result_state["input_tokens"],
+                "output_tokens": result_state["output_tokens"],
+            }
+            if model_error:
+                sample_result["error"] = model_error
+            sample_results.append(sample_result)
+
+        if stop_run:
+            if sample_results:
+                source_csv = row.get("source_csv", "")
+                cache_object = {
+                    "question_id": question_id,
+                    "prompt": prompt,
+                    "model": model_name,
+                    "ifc_file": row["ifc-file"],
+                    "source_csv": str(source_csv) if source_csv is not None else "",
+                    "crud_operation": crud_value,
+                    "results": sample_results,
+                    "timestamp": json.dumps(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                }
+                cache[str(question_id)] = cache_object
+                with cache_path.open("w", encoding="utf-8") as cache_file:
+                    json.dump(cache, cache_file)
+                log_error(f"Partial cache written before stopping ({cache_path.name})")
+            break
+
+        source_csv = row.get("source_csv", "")
         cache_object = {
             "question_id": question_id,
             "prompt": prompt,
             "model": model_name,
             "ifc_file": row["ifc-file"],
+            "source_csv": str(source_csv) if source_csv is not None else "",
+            "crud_operation": crud_value,
             "results": sample_results,
             "timestamp": json.dumps(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         }
@@ -986,7 +1340,13 @@ async def main():
 
         log(f"QUESTION id={question_id} written to cache ({cache_path.name})")
 
-    log(f"Done. Cache written to: {cache_path}")
+        if stop_run:
+            break
+
+    if stop_run:
+        log_error(f"Stopped early due to insufficient quota. Cache at: {cache_path}")
+    else:
+        log(f"Done. Cache written to: {cache_path}")
 
 
 if __name__ == "__main__":
