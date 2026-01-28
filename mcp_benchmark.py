@@ -1,7 +1,7 @@
 """Simple script to run the IFC MCP benchmark.
 
 Usage:
-  python mcp-client.py --config configs/benchmark.config.json [--only-llm]
+  python mcp_benchmark.py --config configs/benchmark.config.json [--only-llm]
 
 How it works:
   Loads a benchmark config, prepares questions, connects to IFC Bonsai MCP server
