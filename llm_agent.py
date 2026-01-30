@@ -965,7 +965,11 @@ async def main():
                 )
                 continue
 
-            model_output = result_state["model_output"].__dict__ if output_object else result_state["model_output"]
+            model_output = result_state["model_output"]
+
+            if model_output:
+               if is_retrieve:
+                    model_output = model_output.__dict__
 
             test = importlib.import_module(test_path)
             t1 = time.time()
