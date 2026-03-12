@@ -8,4 +8,10 @@ results/
 *.pyc
 .vscode/
 bin_*
+<<<<<<< HEAD
 .idea
+=======
+/configs/**
+!/configs/**/
+!/configs/**/*example*
+>>>>>>> ba5a8ca0cd25538e640c51f1fbed650af16cd73b

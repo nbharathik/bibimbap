@@ -7,3 +7,4 @@ python-dotenv~=1.2.1
 pydantic~=2.12.3
 langchain-mcp-adapters>=0.1.0
 langchain-openai
+langchain-google-genai
