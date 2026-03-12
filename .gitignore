@@ -1,5 +1,4 @@
 **/benchmark.config.json
-**/.env
 .env
 .venv
 venv/
@@ -9,3 +8,4 @@ results/
 *.pyc
 .vscode/
 bin_*
+.idea
