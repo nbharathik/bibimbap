@@ -1,5 +1,4 @@
 import ifcopenshell
-import os
 import ifcopenshell.geom
 import ifcopenshell.util.shape
 

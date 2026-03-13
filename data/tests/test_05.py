@@ -51,5 +51,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         metrics["integrity_constraint"] = True
 
     return metrics
-
-#execute_test("../ifc/basic_tasks.ifc", "../results/edited_ifc_gpt-4.1/15/basic_tasks_0.ifc", {})

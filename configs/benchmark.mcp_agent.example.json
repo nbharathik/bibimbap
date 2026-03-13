@@ -1,0 +1,29 @@
+{
+  "questions_csv": "data/prompts/basic_tasks.csv",
+  "num_samples": 1,
+  "model_name": "anthropic:claude-3-7-sonnet-latest",
+  "system_prompt": "You are a BIM assistant using MCP tools. Use tools when needed and return concise results.",
+  "llm_agent_system": "llm_agents.mcp_agent:MCPAgent",
+  "agent": {
+    "mcp_servers": {
+      "ifc-bonsai-mcp": {
+        "command": "python",
+        "args": [
+          "-m",
+          "blender_mcp.server"
+        ],
+        "transport": "stdio"
+      }
+    }
+  },
+  "paths": {
+    "ifc_dir": "data/ifc",
+    "tests_module": "data.tests",
+    "structured_outputs_module": "data.structured_outputs",
+    "results_dir": "results"
+  },
+  "results": {
+    "cache_filename_template": "cache_{model_suffix}.json",
+    "edited_ifc_dir_template": "edited_ifc_{model_suffix}"
+  }
+}

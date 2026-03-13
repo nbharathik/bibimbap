@@ -6,21 +6,30 @@ import sys
 import tempfile
 import textwrap
 import traceback
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import ClassVar, Tuple
 
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
-from langchain.chat_models import init_chat_model
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
+
+from .base import BaseLLMAgent
+from .runtime.runtime_core import is_recursion_error
+from .runtime.runtime_langchain import (
+    aggregate_token_usage_from_callback,
+    extract_messages_from_events,
+    extract_structured_response_from_events,
+    fallback_tool_iteration_from_event,
+    init_model,
+    parse_messages_for_output_and_tool_calls,
+)
+
 try:
     from langchain_core.callbacks import get_usage_metadata_callback
 except Exception:  # pragma: no cover
     get_usage_metadata_callback = None
-
-from base_class import TextToBIM
 
 
 def _safe_jsonable(value):
@@ -309,13 +318,33 @@ class ExecuteIFCCodeTool(BaseTool):
         return await asyncio.to_thread(self._run, code=code, ifc_file_path=ifc_file_path)
 
 
-class OpenAICodeAgent(TextToBIM):
-    def __init__(self, system_prompt: str | None = None, model_name: str | None = None):
-        super().__init__(system_prompt=system_prompt, model_name=model_name)
-        self.llm = init_chat_model(self.model_name or "openai:gpt-5.2")
-        self.execute_ifc_tool = ExecuteIFCCodeTool()
+class CodeExecutionAgent(BaseLLMAgent):
+    def __init__(
+        self,
+        system_prompt: str | None = None,
+        model_name: str | None = None,
+        agent_config: dict | None = None,
+    ):
+        super().__init__(
+            system_prompt=system_prompt,
+            model_name=model_name,
+            agent_config=agent_config,
+        )
+        self.llm = init_model(self.model_name, "openai:gpt-5.2")
+        self.execute_ifc_tool = ExecuteIFCCodeTool(
+            timeout_seconds=int(self.agent_config.get("tool_timeout", 45)),
+            force_subprocess=bool(self.agent_config.get("force_subprocess", False)),
+        )
 
-    async def _ainvoke(self, prompt: str, ifc_path: str, output_format: type[BaseModel] | None):
+    async def _ainvoke(
+        self, prompt: str, ifc_path: str, output_format: type[BaseModel] | None
+    ):
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.tool_call_iterations = []
+        self.last_error = None
+        self.last_recursion_error = False
+
         tools = [self.execute_ifc_tool]
         agent = (
             create_agent(self.llm, tools, response_format=ToolStrategy(output_format))
@@ -345,107 +374,62 @@ class OpenAICodeAgent(TextToBIM):
                 usage_cb_cm = None
                 usage_cb = None
 
+        chain = []
+        tool_call_fallback: list[dict] = []
         try:
-            chain = [
-                event
-                async for event in agent.astream_events(
-                    {
-                        "messages": [
-                            {"role": "system", "content": self.llm_system_prompt or ""},
-                            {"role": "user", "content": user_content},
-                        ]
-                    },
-                    config={"callbacks": [usage_cb]} if usage_cb is not None else None,
-                )
-            ]
+            async for event in agent.astream_events(
+                {
+                    "messages": [
+                        {"role": "system", "content": self.llm_system_prompt or ""},
+                        {"role": "user", "content": user_content},
+                    ]
+                },
+                config={"callbacks": [usage_cb]} if usage_cb is not None else None,
+            ):
+                if isinstance(event, dict):
+                    fallback_item = fallback_tool_iteration_from_event(event)
+                    if fallback_item is not None:
+                        tool_call_fallback.append(fallback_item)
+                chain.append(event)
+        except BaseException as exc:
+            self.last_error = str(exc)
+            self.last_recursion_error = is_recursion_error(exc)
+
+            messages = extract_messages_from_events(chain)
+            _, parsed_iterations, parsed_in, parsed_out = parse_messages_for_output_and_tool_calls(
+                messages
+            )
+
+            cb_totals = aggregate_token_usage_from_callback(usage_cb)
+            if cb_totals is not None:
+                self.input_tokens, self.output_tokens = cb_totals
+            else:
+                self.input_tokens, self.output_tokens = parsed_in, parsed_out
+
+            self.tool_call_iterations = (
+                parsed_iterations if parsed_iterations else tool_call_fallback
+            )
+            raise
         finally:
             if usage_cb_cm is not None:
                 usage_cb_cm.__exit__(None, None, None)
 
-        chain_end = chain[-1] if chain else {}
-
-        def _extract_token_usage_from_message(msg) -> tuple[int, int]:
-            usage = getattr(msg, "usage_metadata", None) or {}
-            if isinstance(usage, dict) and usage:
-                in_tok = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
-                out_tok = usage.get("output_tokens") or usage.get("completion_tokens") or 0
-                return int(in_tok or 0), int(out_tok or 0)
-
-            rm = getattr(msg, "response_metadata", None) or {}
-            if isinstance(rm, dict) and rm:
-                if any(k in rm for k in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")):
-                    in_tok = rm.get("input_tokens") or rm.get("prompt_tokens") or 0
-                    out_tok = rm.get("output_tokens") or rm.get("completion_tokens") or 0
-                    return int(in_tok or 0), int(out_tok or 0)
-                token_usage = rm.get("token_usage") or rm.get("usage") or {}
-                if isinstance(token_usage, dict) and token_usage:
-                    in_tok = token_usage.get("input_tokens") or token_usage.get("prompt_tokens") or 0
-                    out_tok = token_usage.get("output_tokens") or token_usage.get("completion_tokens") or 0
-                    return int(in_tok or 0), int(out_tok or 0)
-            return 0, 0
-
-        def _aggregate_token_usage_from_callback(cb) -> tuple[int, int] | None:
-            if cb is None or not getattr(cb, "usage_metadata", None):
-                return None
-            try:
-                cb_in = cb_out = 0
-                for v in cb.usage_metadata.values():
-                    if not isinstance(v, dict):
-                        continue
-                    cb_in += int(v.get("input_tokens") or v.get("prompt_tokens") or 0)
-                    cb_out += int(v.get("output_tokens") or v.get("completion_tokens") or 0)
-                return cb_in, cb_out
-            except Exception:
-                return None
-
-        def _parse_messages_for_output(msgs) -> tuple[str, int, int]:
-            model_out = ""
-            parsed_in = parsed_out = 0
-            for message in msgs or []:
-                msg_in, msg_out = _extract_token_usage_from_message(message)
-                parsed_in += msg_in
-                parsed_out += msg_out
-                finish_reason = (
-                    message.response_metadata.get("finish_reason")
-                    if getattr(message, "response_metadata", None)
-                    else None
-                )
-                if finish_reason == "stop":
-                    model_out = (
-                        message.content
-                        if getattr(message, "content", None) is not None
-                        else model_out
-                    )
-                if finish_reason == "end_turn":
-                    content = (
-                        message.content
-                        if getattr(message, "content", None) is not None
-                        else model_out
-                    )
-                    if isinstance(content, list):
-                        model_out = "".join([c["text"] for c in content if c.get("type") == "text"])
-            return model_out, parsed_in, parsed_out
-
-        messages = (
-            chain_end.get("data", {})
-            .get("output", {})
-            .get("messages", [])
-            if isinstance(chain_end, dict)
-            else []
+        messages = extract_messages_from_events(chain)
+        model_output, parsed_iterations, parsed_in, parsed_out = (
+            parse_messages_for_output_and_tool_calls(messages)
         )
-        model_output, parsed_in, parsed_out = _parse_messages_for_output(messages)
 
-        if (
-            isinstance(chain_end, dict)
-            and "structured_response" in chain_end.get("data", {}).get("output", {}).keys()
-        ):
-            model_output = chain_end["data"]["output"]["structured_response"]
+        structured_response = extract_structured_response_from_events(chain)
+        if structured_response is not None:
+            model_output = structured_response
 
-        cb_totals = _aggregate_token_usage_from_callback(usage_cb)
+        cb_totals = aggregate_token_usage_from_callback(usage_cb)
         if cb_totals is not None:
             self.input_tokens, self.output_tokens = cb_totals
         else:
             self.input_tokens, self.output_tokens = parsed_in, parsed_out
+
+        self.tool_call_iterations = parsed_iterations if parsed_iterations else tool_call_fallback
 
         return model_output
 

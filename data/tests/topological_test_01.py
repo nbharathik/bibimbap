@@ -1,5 +1,4 @@
 import ifcopenshell
-import os
 import ifcopenshell.geom
 import ifcopenshell.util.shape
 
@@ -89,12 +88,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     )
     return metrics
 
-if __name__ == "__main__":
-    path = os.getcwd()
-    print(path)
-    result = execute_test("data/02/01_02_001.ifc", "tests/02/01/results/02/01_02_001.ifc", {})
-    print("\nTest Results:")
-    print(f"  object_exists: {result['object_exists']}")
-    print(f"  right_location: {result['right_location']}")
-    print(f"  right_dimensions: {result['right_dimensions']}")
-    print(f"  integrity_constraint: {result['integrity_constraint']}")  # NEW

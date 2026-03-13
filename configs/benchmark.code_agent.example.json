@@ -1,13 +1,12 @@
 {
-  "questions_csv": "data/prompts/all_questions.csv",
+  "questions_csv": "data/prompts/basic_tasks.csv",
   "num_samples": 1,
   "model_name": "openai:gpt-5-mini-2025-08-07",
-  "system_prompt": "You are a BIM assistant. Execute tools as needed. Prefer deterministic outputs and avoid unnecessary assumptions.",
+  "system_prompt": "You are a BIM assistant. Execute tools as needed and return concise outputs.",
   "llm_agent_system": "llm_agents.code_execution_agent:CodeExecutionAgent",
   "agent": {
     "tool_timeout": 45,
-    "force_subprocess": true,
-    "mcp_servers": {}
+    "force_subprocess": true
   },
   "paths": {
     "ifc_dir": "data/ifc",

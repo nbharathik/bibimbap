@@ -1,10 +1,10 @@
 """Analyze benchmark results and write summary CSV/TXT reports.
 
 Usage:
-  python analyze_results.py [path_to_run_dir_or_cache_file ...]
-  python analyze_results.py --latest
-  python analyze_results.py --dir results/run_x
-  python analyze_results.py --semantic-splits 20 20 20 20 20, uses to split the csv into categories to get separate results
+  python scripts/analyze_results.py [path_to_run_dir_or_cache_file ...]
+  python scripts/analyze_results.py --latest
+  python scripts/analyze_results.py --dir results/run_x
+  python scripts/analyze_results.py --semantic-splits 20 20 20 20 20
 
 How it works:
   Loads cache JSON files, expands per-sample rows, aggregates metrics, and writes detailed CSV + summary text outputs.

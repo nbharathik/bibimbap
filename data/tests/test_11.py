@@ -75,6 +75,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             metrics["right_dimensions"] = True
 
     return metrics
-
-#execute_test("../ifc/Ifc4_SampleHouse.ifc", "../ifc/Ifc4_SampleHouse.ifc", {})
-#execute_test("../ifc/basic_tasks.ifc", "../ifc/basic_tasks.ifc", {})

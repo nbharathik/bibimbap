@@ -39,5 +39,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics["integrity_constraint"] = True
 
     return metrics
-
-#execute_test("../ifc/02/01_02_018.ifc", "../ifc/02/01_02_018.ifc", {})

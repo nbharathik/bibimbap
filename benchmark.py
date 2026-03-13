@@ -1,24 +1,13 @@
 import argparse
 import importlib
+import importlib.machinery
+import importlib.util
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
-from typing import List, TypedDict
+from pathlib import Path
 
 import pandas as pd
-import inspect
-
-
-class State(TypedDict):
-    prompt: str
-    structured_output: object
-    ifc_file_path: str
-    model_output: str
-    input_tokens: int
-    output_tokens: int
-    tool_call_iterations: List[dict]
-    filtered_tools: list
 
 
 def load_config(config_path: Path) -> dict:
@@ -40,19 +29,15 @@ def resolve_path(base_dir: Path, path_value: str) -> Path:
     return (base_dir / path).resolve()
 
 
-def model_suffix(model_name: str) -> str:
-    return model_name.split(":")[-1] if model_name else "unknown"
-
-
-def load_inference_class(spec: str, base_dir: Path):
+def load_agent_class(spec: str, base_dir: Path):
     """
-    Load a TextToBIM class from either:
+    Load an agent class from:
       - "module.path:ClassName"
       - "relative/or/abs/path.py:ClassName"
     """
     if ":" not in spec:
         raise SystemExit(
-            "Config field 'inference_system' must be of the form "
+            "Config field 'llm_agent_system' must be of the form "
             "'module.path:ClassName' or 'file.py:ClassName'."
         )
 
@@ -61,31 +46,30 @@ def load_inference_class(spec: str, base_dir: Path):
     class_name = class_name.strip()
 
     if not class_name:
-        raise SystemExit("inference_system missing class name after ':'.")
+        raise SystemExit("llm_agent_system missing class name after ':'.")
 
-    # Allow short spec like "custom:MyClass" or "custom.py:MyClass" to resolve inside inference/
+    # Allow short spec like "custom:CustomAgent" to resolve inside llm_agents.
     if (
         not Path(module_or_file).is_absolute()
         and not Path(module_or_file).exists()
-        and not module_or_file.startswith("inference.")
+        and not module_or_file.startswith("llm_agents.")
         and "/" not in module_or_file
         and "\\" not in module_or_file
     ):
-        if not module_or_file.endswith(".py"):
-            module_or_file = f"{module_or_file}.py"
-        module_or_file = str((Path("inference") / module_or_file).as_posix())
+        module_name = module_or_file[:-3] if module_or_file.endswith(".py") else module_or_file
+        module_or_file = f"llm_agents.{module_name}"
 
     candidate_path = resolve_path(base_dir, module_or_file)
     if module_or_file.endswith(".py") or candidate_path.exists():
         if not candidate_path.exists():
-            raise SystemExit(f"Inference file not found: {candidate_path}")
-        inference_dir = str(candidate_path.parent)
+            raise SystemExit(f"Agent file not found: {candidate_path}")
+        package_dir = str(candidate_path.parent)
         repo_dir = str(base_dir)
-        if inference_dir not in sys.path:
-            sys.path.insert(0, inference_dir)
+        if package_dir not in sys.path:
+            sys.path.insert(0, package_dir)
         if repo_dir not in sys.path:
             sys.path.insert(0, repo_dir)
-        module_name = f"_inference_{candidate_path.stem}"
+        module_name = f"_llm_agent_{candidate_path.stem}"
         loader = importlib.machinery.SourceFileLoader(module_name, str(candidate_path))
         spec_obj = importlib.util.spec_from_loader(module_name, loader)
         if spec_obj is None or spec_obj.loader is None:
@@ -96,17 +80,17 @@ def load_inference_class(spec: str, base_dir: Path):
         module = importlib.import_module(module_or_file)
 
     if not hasattr(module, class_name):
-        raise SystemExit(
-            f"Class '{class_name}' not found in '{module_or_file}'."
-        )
+        raise SystemExit(f"Class '{class_name}' not found in '{module_or_file}'.")
     return getattr(module, class_name)
 
 
+def model_suffix(model_name: str) -> str:
+    return model_name.split(":")[-1] if model_name else "unknown"
+
+
 def main() -> None:
-    default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.json"
-    parser = argparse.ArgumentParser(
-        description="Run the IFC benchmark using an inference system from inference/."
-    )
+    default_config = Path(__file__).resolve().parent / "configs" / "benchmark.config.example.json"
+    parser = argparse.ArgumentParser(description="Run the BIBIMBAP benchmark.")
     parser.add_argument(
         "--config",
         default=str(default_config),
@@ -115,7 +99,7 @@ def main() -> None:
     parser.add_argument(
         "--only-llm",
         action="store_true",
-        help="Skip evaluation and only run the inference pipeline.",
+        help="Skip evaluation and only run the LLM agent pipeline.",
     )
     args = parser.parse_args()
 
@@ -125,6 +109,12 @@ def main() -> None:
         config_path = (Path.cwd() / config_path).resolve()
     config = load_config(config_path)
     evaluate = not args.only_llm
+
+    if "inference_system" in config:
+        raise SystemExit(
+            "Config key 'inference_system' is no longer supported. "
+            "Use 'llm_agent_system' instead."
+        )
 
     questions_val = config["questions_csv"]
     f_list = questions_val if isinstance(questions_val, list) else [questions_val]
@@ -139,7 +129,7 @@ def main() -> None:
         questions_list.append(df)
     questions = pd.concat(questions_list, ignore_index=True)
 
-    num_samples = config["num_samples"]
+    num_samples = int(config["num_samples"])
     model_name = config.get("model_name", "")
 
     paths_config = config["paths"]
@@ -149,7 +139,6 @@ def main() -> None:
     results_dir = resolve_path(repo_root, paths_config["results_dir"])
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create a unique directory for this run
     run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_dir = results_dir / f"run_{run_timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -172,18 +161,24 @@ def main() -> None:
     edited_ifc_directory = run_dir / edited_ifc_dirname
     edited_ifc_directory.mkdir(parents=True, exist_ok=True)
 
-    inference_spec = config.get("inference_system", "").strip()
-    if not inference_spec:
+    llm_agent_spec = config.get("llm_agent_system", "").strip()
+    if not llm_agent_spec:
         raise SystemExit(
-            "Config must include 'inference_system', e.g. "
-            "'custom:CustomTextToBIM' or 'openai-mcp.py:CustomTextToBIM'."
+            "Config must include 'llm_agent_system', e.g. "
+            "'llm_agents.code_execution_agent:CodeExecutionAgent'."
         )
 
-    InferenceClass = load_inference_class(inference_spec, repo_root)
-    inference = InferenceClass(
-        system_prompt=config.get("system_prompt"),
-        model_name=config.get("model_name"),
-    )
+    AgentClass = load_agent_class(llm_agent_spec, repo_root)
+    try:
+        agent = AgentClass(
+            system_prompt=config.get("system_prompt"),
+            model_name=config.get("model_name"),
+            agent_config=config.get("agent", {}),
+        )
+    except Exception as exc:
+        raise SystemExit(
+            f"Failed to initialize agent '{llm_agent_spec}' for model '{model_name}': {exc}"
+        ) from exc
 
     cache = {}
 
@@ -236,7 +231,7 @@ def main() -> None:
                 edited_ifc_path.write_bytes(ifc_path.read_bytes())
 
             try:
-                model_output = inference.invoke(
+                model_output = agent.invoke(
                     prompt=str(prompt),
                     ifc_path=str(edited_ifc_path.resolve()),
                     output_format=output_object,
@@ -247,17 +242,20 @@ def main() -> None:
                     {
                         "sample": sample + 1,
                         "model_output": "ERROR_INFERENCE_EXCEPTION",
-                        "tool_call_iterations": [],
+                        "tool_call_iterations": getattr(agent, "tool_call_iterations", [])
+                        or [],
                         "metrics": {},
                         "score": 0,
-                        "input_tokens": 0,
-                        "output_tokens": 0,
+                        "input_tokens": getattr(agent, "input_tokens", 0) or 0,
+                        "output_tokens": getattr(agent, "output_tokens", 0) or 0,
                         "error": str(exc),
                     }
                 )
                 continue
 
-            if output_object and hasattr(model_output, "__dict__"):
+            if output_object and hasattr(model_output, "model_dump"):
+                model_output = model_output.model_dump()
+            elif output_object and hasattr(model_output, "__dict__"):
                 model_output = model_output.__dict__
 
             metrics = None
@@ -273,13 +271,14 @@ def main() -> None:
                     metrics = {}
                 score = sum(metrics.values()) / len(metrics) if metrics else 0
 
-            input_tokens = getattr(inference, "input_tokens", None) or 0
-            output_tokens = getattr(inference, "output_tokens", None) or 0
+            input_tokens = getattr(agent, "input_tokens", None) or 0
+            output_tokens = getattr(agent, "output_tokens", None) or 0
+            tool_call_iterations = getattr(agent, "tool_call_iterations", None) or []
             sample_results.append(
                 {
                     "sample": sample + 1,
                     "model_output": model_output,
-                    "tool_call_iterations": [],
+                    "tool_call_iterations": tool_call_iterations,
                     "metrics": metrics,
                     "score": score,
                     "input_tokens": input_tokens,

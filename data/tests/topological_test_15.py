@@ -59,7 +59,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     )
     return metrics
 
-if __name__ == "__main__":
-    import sys
-    result = execute_test("/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_015_new.ifc","/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_015_out.ifc" , None)
-    print(result)
