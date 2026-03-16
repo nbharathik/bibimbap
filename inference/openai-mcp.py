@@ -9,18 +9,17 @@ from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 
 
-class CustomTextToBIM(TextToBIM):
+class OpenAIMCP(TextToBIM):
 
     def __init__(self, system_prompt: str | None = None, model_name: str | None = None):
         """Custom TextToBIM constructor"""
         super().__init__(system_prompt=system_prompt, model_name=model_name)
         self.llm = init_chat_model(self.model_name or "openai:gpt-5.2")
         self.mcp_client = MultiServerMCPClient(
-            # TODO: have this more abstract as an example?
             {
                 "mcp_servers": {
                     "ifc-bonsai-mcp": {
-                        "command": "C:\\\\Users\\\\ckujatadm\\\\Documents\\\\AI4SC\\\\ifc-bonsai-mcp\\\\.venv\\\\Scripts\\\\python.exe",
+                        "command": "{..path}/python.exe",
                         "args": ["-m", "blender_mcp.server"],
                         "transport": "stdio"
                     }

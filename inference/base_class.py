@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from dotenv import load_dotenv, find_dotenv
-from pathlib import Path
 
 load_dotenv(find_dotenv())
 

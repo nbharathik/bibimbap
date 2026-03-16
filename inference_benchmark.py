@@ -113,7 +113,20 @@ def main() -> None:
         help="Path to the benchmark config JSON file.",
     )
     parser.add_argument(
+        "--run-name",
+        "--run_name",
+        default="",
+        help="Suffix for new run folder.",
+    )
+    parser.add_argument(
+        "--resume-run",
+        "--resume_run",
+        default="",
+        help="Resume from existing run directory.",
+    )
+    parser.add_argument(
         "--only-llm",
+        "--only_llm",
         action="store_true",
         help="Skip evaluation and only run the inference pipeline.",
     )
@@ -149,14 +162,27 @@ def main() -> None:
     results_dir = resolve_path(repo_root, paths_config["results_dir"])
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create a unique directory for this run
-    run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_dir = results_dir / f"run_{run_timestamp}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Result for this run will be stored in: {run_dir}")
-
-    with (run_dir / "config.json").open("w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+    resume_run = (args.resume_run or "").strip()
+    if resume_run:
+        run_dir = Path(resume_run).expanduser().resolve()
+        run_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Resuming run in: {run_dir}")
+        cfg_out = run_dir / "config.json"
+        if not cfg_out.exists():
+            with cfg_out.open("w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+    else:
+        run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        run_name = (args.run_name or "").strip()
+        if run_name:
+            safe = "".join(c if (c.isalnum() or c in "-_.") else "_" for c in run_name)
+            run_dir = results_dir / f"run_{run_timestamp}_{safe}"
+        else:
+            run_dir = results_dir / f"run_{run_timestamp}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Result for this run will be stored in: {run_dir}")
+        with (run_dir / "config.json").open("w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
 
     results_config = config["results"]
     model_suffix_value = model_suffix(model_name)
@@ -185,7 +211,16 @@ def main() -> None:
         model_name=config.get("model_name"),
     )
 
-    cache = {}
+    cache: dict = {}
+    if cache_path.exists():
+        try:
+            with cache_path.open("r", encoding="utf-8") as cache_file:
+                cache = json.load(cache_file)
+            print(f"Loaded existing cache from: {cache_path}")
+            print(f"Cache contains {len(cache)} entries.")
+        except Exception as exc:
+            print(f"Warning: Failed to load existing cache {cache_path}: {exc}")
+            print("Starting with empty cache.")
 
     for index, row in questions.iterrows():
         print(f"Processing question {int(str(index)) + 1} of {len(questions)}...")
