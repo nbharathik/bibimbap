@@ -5,7 +5,7 @@
 > This repository accompanies the BIBIMBAP paper. If you use this framework in your research, please cite accordingly.
 
 <p align="center">
-  <img src="docs/benchmark-architecture.jpg" alt="BIBIMBAP Architecture" width="800">
+  <img src="docs/assets/benchmark-architecture.jpg" alt="BIBIMBAP Architecture" width="800">
 </p>
 
 **Key capabilities:**
