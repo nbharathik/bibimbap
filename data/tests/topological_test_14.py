@@ -156,7 +156,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     metrics["integrity_constraint"] = metrics["right_dimensions"] and metrics["right_location"]
     return metrics
 
-if __name__ == "__main__":
-    import sys
-    result = execute_test("/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_014.ifc","/Users/tobi/Documents/Projekte/Show2Instruct/bim-benchmark/test_case_files/01/02/01_02_014_out.ifc" , None)
-    print(result)

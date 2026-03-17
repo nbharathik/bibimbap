@@ -1,0 +1,18 @@
+{
+  "questions_csv": "data/prompts/all_questions.csv",
+  "num_samples": 1,
+  "model_name": "google_genai:gemini-2.0-flash",
+  "system_prompt": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation. You must always load the ifc file first.",
+  "llm_agent_system": "llm_agents.custom:CustomAgent",
+  "agent": {},
+  "paths": {
+    "ifc_dir": "data/ifc",
+    "tests_module": "data.tests",
+    "structured_outputs_module": "data.structured_outputs",
+    "results_dir": "results"
+  },
+  "results": {
+    "cache_filename_template": "cache_{model_suffix}.json",
+    "edited_ifc_dir_template": "edited_ifc_{model_suffix}"
+  }
+}

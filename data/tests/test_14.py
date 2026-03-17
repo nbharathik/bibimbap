@@ -143,5 +143,3 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         return metrics_z
     else:
         return metrics_height
-
-#execute_test("../ifc/basic_tasks.ifc", "../results/edited_ifc_gpt-4.1/29/basic_tasks_0.ifc", {})
