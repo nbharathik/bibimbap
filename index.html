@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="BIBIMBAP: A Text-to-BIM benchmark with 100 curated tasks spanning CRUD operations for evaluating LLM-driven BIM systems on IFC models.">
+    <meta name="keywords" content="BIM, IFC, LLM, benchmark, Text-to-BIM, building information modeling, BIBIMBAP, automated programming">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://nbharathik.github.io/bibimbap/">
+
+    <meta property="og:title" content="BIBIMBAP: A Benchmark for Instructional BIM-Based Automated Programming">
+    <meta property="og:description" content="A Text-to-BIM benchmark with 100 curated tasks spanning CRUD operations for evaluating LLM-driven systems on IFC models.">
+    <meta property="og:image" content="https://nbharathik.github.io/bibimbap/assets/benchmark-architecture.jpg">
+    <meta property="og:url" content="https://nbharathik.github.io/bibimbap/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="BIBIMBAP">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BIBIMBAP: A Benchmark for Instructional BIM-Based Automated Programming">
+    <meta name="twitter:description" content="A Text-to-BIM benchmark with 100 curated tasks spanning CRUD operations for evaluating LLM-driven systems on IFC models.">
+    <meta name="twitter:image" content="https://nbharathik.github.io/bibimbap/assets/benchmark-architecture.jpg">
+
+    <link rel="icon" href="assets/logo.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <title>BIBIMBAP: A Benchmark for Instructional BIM-Based Automated Programming</title>
+
+    <style>
+        @font-face {
+            font-family: 'Google Sans';
+            src: url('assets/GoogleSans-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            font-family: BlinkMacSystemFont,-apple-system,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,Helvetica,Arial,sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+        }
+
+        header {
+            padding: 30px;
+            padding-bottom: 0;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 40px;
+            font-weight: 500;
+            font-family: 'Google Sans', system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+            background-image: linear-gradient(
+                to right,
+                #008C52 0%,
+                #0A7A64 15%,
+                #0F6B79 30%,
+                #135C8E 45%,
+                #01509D 50%,
+                #135C8E 55%,
+                #0F6B79 70%,
+                #0A7A64 85%,
+                #008C52 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            background-size: 200% auto;
+            animation: titleShine 8s linear infinite;
+        }
+
+        @keyframes titleShine {
+            0% { background-position: 0% center; }
+            100% { background-position: -200% center; }
+        }
+
+        h3 {
+            margin: 20px;
+            margin-top: 40px;
+            font-size: 32px;
+            font-weight: bold;
+            color: #363636;
+            font-family: 'Google Sans', system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+        }
+
+        p {
+            font-size: 1.1em;
+            line-height: 1.4;
+            color: #000000B3;
+        }
+
+        .contrib-list {
+            text-align: left;
+            max-width: 800px;
+            margin: 0 auto 20px auto;
+            padding: 0 40px;
+        }
+        .contrib-list li {
+            margin: 8px 0;
+        }
+
+        .name {
+            color: #485fc7;
+            text-decoration: none;
+        }
+        .name:hover {
+            color: black;
+            text-decoration: underline;
+        }
+
+        .citation-card { position: relative; display: inline-block; width: 100%; max-width: 800px; margin: 24px 0 16px 0; }
+        .copy-button { position: absolute; top: 10px; right: 10px; border: none; background: transparent; padding: 4px; cursor: pointer; color: #555; font-size: 18px; }
+        .copy-button:hover { color: #1c1c1c; }
+        .citation-text { font-family: 'Courier New', Courier, monospace; margin: 0; padding: 18px; white-space: pre-wrap; color: #333; text-align: left; border: 1px solid #ddd; border-radius: 5px; background-color: #fafafa; overflow-x: auto; }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .button i {
+            margin-right: 8px;
+        }
+
+        #authors {
+            justify-content: center;
+            font-size: 20px;
+            font-family: 'Google Sans', Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+            margin-top: 8px;
+        }
+
+        #abstract {
+            text-align: center;
+            background-color: #f5f5f5;
+        }
+        #abstract p {
+            display: inline-block;
+            margin: 0 auto;
+            text-align: justify;
+        }
+
+        #benchmark {
+            text-align: center;
+        }
+        #benchmark p, #benchmark ul {
+            text-align: left;
+        }
+
+        #results {
+            text-align: center;
+        }
+        #results p, #results ul {
+            text-align: left;
+        }
+
+        /* --- Affiliations --- */
+        .affiliations {
+            text-align: center;
+            margin: 10px auto 0 auto;
+            padding: 0 20px;
+        }
+        .affiliations p {
+            margin: 2px 0;
+            font-size: 0.95em;
+            color: #4a4a4a;
+            font-family: 'Google Sans', Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+        }
+        .affiliations sup {
+            color: #0F6B79;
+            font-weight: bold;
+        }
+
+        .header-actions {
+            margin-top: 14px;
+        }
+
+        /* --- Style for new sections --- */
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px 0;
+        }
+        .gallery img {
+            width: 46%;
+            min-width: 250px;
+            object-fit: cover;
+            transition: transform 0.2s ease-in-out;
+        }
+        .gallery img:hover {
+            transform: scale(1.03);
+        }
+        .img-caption {
+            font-size: 0.9em;
+            color: #555;
+            text-align: center;
+            margin-top: -10px;
+            padding-bottom: 20px;
+        }
+        .contrib-list li {
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        #method h4, #results h4 {
+            text-align: left;
+            padding-left: 40px;
+            padding-top: 15px;
+            margin-bottom: -10px;
+            color: #333;
+        }
+        #method p, #method ul {
+            padding-left: 40px;
+            padding-right: 40px;
+        }
+
+        /* --- Results tables --- */
+        .results-table-wrapper {
+            overflow-x: auto;
+            padding: 0 20px 20px 20px;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95em;
+            margin: 10px auto;
+        }
+        .results-table thead {
+            background-color: #0F6B79;
+            color: #fff;
+        }
+        .results-table th, .results-table td {
+            padding: 10px 14px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .results-table th:first-child, .results-table td:first-child {
+            text-align: left;
+        }
+        .results-table tbody tr:nth-child(even) {
+            background-color: #f0f8f6;
+        }
+        .results-table tbody tr:hover {
+            background-color: #e0f0ed;
+        }
+        .results-table .best {
+            font-weight: bold;
+        }
+
+        /* --- Task category pills --- */
+        .category-pills {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px 40px 20px 40px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .pill.basic { background-color: #01509D; }
+        .pill.spatial { background-color: #0F6B79; }
+        .pill.topological { background-color: #0A7A64; }
+        .pill.numeric { background-color: #008C52; }
+        .pill.conceptual { background-color: #135C8E; }
+
+        /* --- Figure row --- */
+        .figure-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            padding: 10px 20px 20px 20px;
+            align-items: flex-start;
+        }
+        .figure-row .figure-item {
+            flex: 1 1 320px;
+            max-width: 420px;
+            text-align: center;
+        }
+        .figure-row .figure-item img {
+            width: 100%;
+        }
+        .figure-row .figure-item p {
+            font-size: 0.85em;
+            color: #555;
+            padding: 8px 10px 0 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // --- Copy BibTeX button ---
+        const copyButtons = document.querySelectorAll('[data-copy-target]');
+        copyButtons.forEach((button) => {
+            button.addEventListener('click', async () => {
+                const target = document.getElementById(button.dataset.copyTarget);
+                if (!target) {
+                    return;
+                }
+                const text = target.textContent.trim();
+                try {
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        // Brief visual feedback
+                        const icon = button.querySelector('i');
+                        if (icon) {
+                            icon.classList.remove('fa-copy');
+                            icon.classList.add('fa-check');
+                            setTimeout(() => {
+                                icon.classList.remove('fa-check');
+                                icon.classList.add('fa-copy');
+                            }, 1500);
+                        }
+                        return;
+                    }
+                } catch (clipboardError) {
+                    // Fallback handled below when Clipboard API fails
+                }
+                const helper = document.createElement('textarea');
+                helper.value = text;
+                helper.setAttribute('readonly', '');
+                helper.style.position = 'absolute';
+                helper.style.left = '-9999px';
+                document.body.appendChild(helper);
+                helper.select();
+                document.execCommand('copy');
+                document.body.removeChild(helper);
+            });
+        });
+
+        // --- Smooth scroll for anchor links ---
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                const targetEl = document.querySelector(targetId);
+                if (targetEl) {
+                    e.preventDefault();
+                    targetEl.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    });
+    </script>
+    <div style="max-width: 1000px; flex-direction: column; align-items: center; justify-content: center; display: flex;">
+        <header>
+            <h1><img src="assets/logo.png" style="width: 50px; height: 50px; margin-right: -3px; margin-bottom: -10px;">
+                <b>BIBIMBAP: </b>A Benchmark for Instructional BIM-Based Automated Programming</h1>
+            <section id="authors">
+                <a class="name" href="mailto:clemens.kujat@uni-rostock.de" target="_blank">Clemens Kujat</a><sup>1</sup>,
+                <a class="name" href="mailto:bharathikannan.nithyanantham@uni-rostock.de" target="_blank">Bharathi Kannan Nithyanantham</a><sup>2</sup>,
+                <a class="name" href="mailto:stefan.telgmann@uni-rostock.de" target="_blank">Stefan Telgmann</a><sup>1</sup>,
+                <a class="name" href="mailto:tobias.sesterhenn@tu-clausthal.de" target="_blank">Tobias Sesterhenn</a><sup>3</sup>,
+                <a class="name" href="mailto:joern.plonnings@uni-rostock.de" target="_blank">Jörn Plönnigs</a><sup>1</sup>,
+                <a class="name" href="mailto:stefan.luedtke@uni-rostock.de" target="_blank">Stefan Lüdtke</a><sup>2</sup>,
+                <a class="name" href="mailto:christian.bartelt@tu-clausthal.de" target="_blank">Christian Bartelt</a><sup>3</sup>
+            </section>
+
+            <div class="affiliations">
+                <p><sup>1</sup>AI for Sustainable Construction, University of Rostock</p>
+                <p><sup>2</sup>Institute for Visual and Analytic Computing, University of Rostock</p>
+                <p><sup>3</sup>Technical University of Clausthal</p>
+            </div>
+
+            <div class="header-actions">
+                <a class="button" href="#" target="_blank">
+                    <i class="fas fa-file-pdf"></i> Arxiv
+                </a>
+                <a class="button" href="#" target="_blank">
+                    <i class="fas fa-database"></i> HuggingFace
+                </a>
+                <a class="button" href="https://github.com/nbharathik/bibimbap" target="_blank">
+                    <i class="fab fa-github"></i> Code
+                </a>
+            </div>
+        </header>
+    </div>
+
+
+    <div id="architecture" style="width: 100%; padding-top: 28px;">
+        <div style="max-width: 800px; margin: auto; text-align: center;">
+            <img src="assets/benchmark-architecture.jpg" style="width: 100%; padding: 10px 20px 10px 20px;" alt="Benchmark architecture diagram">
+            <p class="img-caption">Benchmark architecture: the Text-to-BIM system takes a prompt and an IFC file (with an output structure for retrieval tasks) and produces an edited IFC file and optional structured output, which are evaluated using the test file and the original IFC model.</p>
+        </div>
+    </div>
+
+
+    <div id="abstract" style="width: 100%;">
+        <div style="max-width: 800px; margin: auto;">
+            <h3>Abstract</h3>
+
+            <p style="padding: 40px; padding-top: 0; padding-bottom: 20px;">Large Language Models (LLMs) are increasingly used as natural-language interfaces for Building Information Modeling (BIM), yet the community lacks a benchmark to evaluate whether LLM-driven systems can reliably edit Industry Foundation Classes (IFC) models beyond information retrieval. We introduce <b>BIBIMBAP</b>, a Text-to-BIM benchmark with <b>100 curated tasks</b> spanning the full set of <b>CRUD operations</b> and organized into spatial, geometric, topological, numeric, and conceptual understanding tasks. Each task provides a natural-language prompt, a reference IFC model, structured expected outputs, and executable test scripts to enable reproducible, automated evaluation. We run baseline experiments across multiple LLMs using a simple code-execution setup. The results show limited overall success, with common failures in preserving BIM constraints and spatial reasoning. Overall, BIBIMBAP provides a foundation for comparing Text-to-BIM systems and analyzing their failure modes.</p>
+        </div>
+    </div>
+
+    <div id="contributions" style="width: 100%; background-color: white;">
+        <div style="max-width: 800px; margin: auto;">
+            <h3>Contributions</h3>
+
+            <ul class="contrib-list" style="padding-left: 60px; padding-right: 40px; padding-bottom: 20px;">
+                <li><b>Full CRUD Task Suite</b><br>
+                A set of 100 Text-to-BIM tasks spanning the full CRUD operations (Create, Read, Update, Delete) and multiple reasoning categories: basic, spatial, topological, numeric, and conceptual.
+                </li>
+                <li><b>Standardized Prompt Grammar</b><br>
+                A prompt grammar (operator / operand / context specifiers) that standardizes task formulation and supports systematic analysis and extensibility of the benchmark.
+                </li>
+                <li><b>Automated Evaluation Pipeline</b><br>
+                An automated pipeline with procedural tests and fine-grained evaluation metrics (existence, location, dimensions, correctness, and IFC integrity constraints) that enables reproducible, deterministic evaluation without LLM-as-a-judge.
+                </li>
+                <li><b>Baseline Experiments</b><br>
+                A validation of the benchmark across multiple LLMs (Claude Opus 4.5, Claude Sonnet 4.5, Gemini 3 Flash, GPT-5.2, GPT-5 Mini, GPT-4.1), establishing baselines and analyzing common failure modes.
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="benchmark" style="width: 100%;">
+        <div style="max-width: 800px; margin: auto;">
+
+            <h3>Task Categories</h3>
+            <p>Tasks are organized by CRUD operation and further grouped by reasoning requirements:</p>
+            <ul style="padding-left: 80px; padding-right: 40px; padding-bottom: 10px;">
+                <li><b>Basic:</b> Tasks where all required information is explicitly provided in the prompt (e.g., create a wall at given coordinates).</li>
+                <li><b>Spatial:</b> Tasks requiring understanding of spatial/geometric concepts (e.g., place a window centered on the longest wall).</li>
+                <li><b>Topological:</b> Tasks requiring understanding of topological relationships between IFC elements (e.g., move a door from one wall to another).</li>
+                <li><b>Numeric:</b> Tasks requiring numerical computation or aggregation (e.g., compute total floor area).</li>
+                <li><b>Conceptual:</b> Tasks requiring architectural domain knowledge (e.g., identify the entrance door).</li>
+            </ul>
+
+            <h3>Prompt Grammar</h3>
+            <p>Each task prompt follows a standardized grammar of Operator, Operand, Operation Specifiers, and Context Specifiers, enabling systematic analysis and extensibility:</p>
+            <div style="padding: 10px 20px 10px 20px; text-align: center;">
+                <img src="assets/prompt-taxonomy_page.jpg" style="width: 100%;" alt="Prompt taxonomy: Operator, Operand, Operation Specifiers, Context Specifiers">
+            </div>
+            <p class="img-caption">The prompt grammar decomposes each task into an operator (CRUD action), an operand (target element or property), operation specifiers (parameters), and context specifiers (how to identify the target in the model).</p>
+
+            <h3>Evaluation Metrics</h3>
+            <p>Each task is evaluated using fine-grained, deterministic metrics:</p>
+            <ul style="padding-left: 80px; padding-right: 40px; padding-bottom: 10px;">
+                <li><b>Object Exists (Create):</b> Whether the requested element was created in the IFC model.</li>
+                <li><b>Object Not Exists (Delete):</b> Whether the targeted element was removed.</li>
+                <li><b>Correct Location (Create, Update):</b> Whether element placement matches the expected coordinates.</li>
+                <li><b>Correct Dimensions (Create, Update):</b> Whether element geometry matches specifications.</li>
+                <li><b>Correct Answer (Read):</b> Whether the structured retrieval output matches ground truth.</li>
+                <li><b>Integrity Assured (Create, Update, Delete):</b> Whether IFC model integrity constraints are preserved.</li>
+            </ul>
+
+            <h3>Task Examples</h3>
+            <div class="figure-row">
+                <div class="figure-item">
+                    <img src="assets/result-success_page.jpg" alt="Spatial Update task example: rotating a wall by 45 degrees">
+                    <p><b>Spatial Update:</b> "Rotate the wall by 45 degrees around its center which is parallel to wall with GlobalId = ..." showing before (left) and after (right).</p>
+                </div>
+                <div class="figure-item">
+                    <img src="assets/conceptual-right-guess.jpg" alt="Conceptual Read task example: identifying the entrance door">
+                    <p><b>Conceptual Read:</b> "Provide the GlobalId of the door that is perceived as the entrance." Requires architectural domain knowledge.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="results" style="width: 100%; background-color: white;">
+        <div style="max-width: 800px; margin: auto;">
+            <h3>Results</h3>
+            <p style="padding: 0 40px 10px 40px;">We evaluated six LLMs on BIBIMBAP using a simple code-execution setup with IfcOpenShell. The results reveal limited overall success, with all models scoring below 40% on average.</p>
+
+            <h4 style="text-align: center; padding-left: 0;">Model Performance by Category (%)</h4>
+            <div class="results-table-wrapper">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Basic (20)</th>
+                            <th>Spatial (20)</th>
+                            <th>Topological (20)</th>
+                            <th>Numeric (20)</th>
+                            <th>Conceptual (20)</th>
+                            <th>Overall Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Claude Opus 4.5</td>
+                            <td>46.3</td>
+                            <td class="best">60.8</td>
+                            <td>38.8</td>
+                            <td class="best">30.0</td>
+                            <td>20.0</td>
+                            <td class="best">39.2</td>
+                        </tr>
+                        <tr>
+                            <td>Gemini 3 Flash</td>
+                            <td class="best">54.2</td>
+                            <td>45.8</td>
+                            <td class="best">44.2</td>
+                            <td>5.0</td>
+                            <td>15.0</td>
+                            <td>32.8</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5.2</td>
+                            <td>42.5</td>
+                            <td>36.0</td>
+                            <td>30.0</td>
+                            <td>5.0</td>
+                            <td class="best">25.0</td>
+                            <td>27.7</td>
+                        </tr>
+                        <tr>
+                            <td>Claude Sonnet 4.5</td>
+                            <td>47.9</td>
+                            <td>36.6</td>
+                            <td>32.9</td>
+                            <td>10.0</td>
+                            <td>10.0</td>
+                            <td>27.5</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5 Mini</td>
+                            <td>35.0</td>
+                            <td>33.5</td>
+                            <td>27.9</td>
+                            <td>0.0</td>
+                            <td class="best">25.0</td>
+                            <td>24.3</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-4.1</td>
+                            <td>17.5</td>
+                            <td>34.2</td>
+                            <td>21.7</td>
+                            <td>0.0</td>
+                            <td>20.0</td>
+                            <td>18.7</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 style="text-align: center; padding-left: 0;">CRUD Operation Success Share by Model (%)</h4>
+            <div class="results-table-wrapper">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Create</th>
+                            <th>Read</th>
+                            <th>Update</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Claude Opus 4.5</td>
+                            <td class="best">73.3</td>
+                            <td>30.9</td>
+                            <td>37.8</td>
+                            <td>36.7</td>
+                        </tr>
+                        <tr>
+                            <td>Gemini 3 Flash</td>
+                            <td>53.3</td>
+                            <td>43.3</td>
+                            <td>23.6</td>
+                            <td>35.5</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5.2</td>
+                            <td>60.0</td>
+                            <td>18.2</td>
+                            <td>26.7</td>
+                            <td>31.3</td>
+                        </tr>
+                        <tr>
+                            <td>Claude Sonnet 4.5</td>
+                            <td>30.0</td>
+                            <td>18.2</td>
+                            <td class="best">46.6</td>
+                            <td class="best">40.0</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5 Mini</td>
+                            <td>38.3</td>
+                            <td class="best">54.7</td>
+                            <td>10.9</td>
+                            <td>28.9</td>
+                        </tr>
+                        <tr>
+                            <td>GPT-4.1</td>
+                            <td>26.7</td>
+                            <td>40.0</td>
+                            <td>9.0</td>
+                            <td>24.4</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="text-align: center; padding: 10px 20px 10px 20px;">
+                <img src="assets/metrics.png" style="width: 70%; max-width: 500px;" alt="Radar chart showing model performance across six evaluation criteria">
+                <p class="img-caption">Each model's performance across the six evaluation criteria: Integrity Assured, Object Exists, Object Not Exists, Correct Answer, Correct Dimensions, and Correct Location.</p>
+            </div>
+
+            <h3 style="text-align: center; padding-left: 0;">Key Findings</h3> 
+            <ul style="padding-left: 80px; padding-right: 40px; padding-bottom: 20px;">
+                <li><b>Claude Opus 4.5</b> achieves the highest overall score (39.2%), excelling in spatial reasoning (60.8%) and element creation (73.3%).</li>
+                <li><b>Numeric tasks</b> are the hardest category across all models, with most scoring below 10%.</li>
+                <li><b>No model dominates all categories</b>. Strengths vary across CRUD operations and reasoning types.</li>
+                <li>Even when code executes successfully, models often fail at correct element selection, proper computations, or maintaining consistent IFC integrity.</li>
+            </ul>
+        </div>
+    </div>
+
+
+    <div id="bibtex" style="width: 100%; background-color: white;">
+        <div style="max-width: 800px; margin: auto;">
+            <h3>BibTeX</h3>
+            <div class="citation-card">
+                <button class="copy-button" type="button" data-copy-target="bibtex-entry" aria-label="Copy BibTeX citation">
+                    <i class="fas fa-copy" aria-hidden="true"></i>
+                </button>
+                <pre id="bibtex-entry" class="citation-text">
+</pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="contact" style="width: 100%;">
+        <div style="max-width: 800px; margin: auto;">
+            <h3>Contact</h3>
+            <p style="padding: 40px; padding-top: 0;">
+                For questions about our benchmark, please contact the authors via email.<br>
+            </p>
+
+        </div>
+    </div>
+
+
+    <p style="margin-bottom:50px;">
+        This website is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.<br>
+        Webpage adapted from Nerfies and MARS.
+    </p>
+</body>
+</html>
