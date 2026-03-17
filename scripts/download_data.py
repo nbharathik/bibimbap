@@ -50,7 +50,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Download benchmark data from Hugging Face.")
     parser.add_argument(
         "--repo-id",
-        default="your-org/bibimbap-data",
+        default="clemenskujat/bibimbap-data",
         help="Hugging Face dataset repo id.",
     )
     parser.add_argument(
@@ -60,7 +60,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--dest",
-        default="data/ifc",
+        default="data/",
         help="Destination directory for downloaded IFC assets.",
     )
     parser.add_argument(

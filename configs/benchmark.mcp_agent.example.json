@@ -1,8 +1,8 @@
 {
-  "questions_csv": "data/prompts/basic_tasks.csv",
+  "questions_csv": "data/prompts/all_questions.csv",
   "num_samples": 1,
   "model_name": "anthropic:claude-3-7-sonnet-latest",
-  "system_prompt": "You are a BIM assistant using MCP tools. Use tools when needed and return concise results.",
+  "system_prompt": "You are a BIM assistent. Whenever you have questions about values, infer them or use default values. Always execute the commands and do not ask for confirmation. You must always load the ifc file first.",
   "llm_agent_system": "llm_agents.mcp_agent:MCPAgent",
   "agent": {
     "mcp_servers": {

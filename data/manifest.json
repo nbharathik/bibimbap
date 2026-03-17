@@ -1,5 +1,5 @@
 {
-  "dataset_repo": "your-org/bibimbap-data",
+  "dataset_repo": "clemenskujat/bibimbap-data",
   "revision": "main",
   "description": "Optional checksum manifest for remote data synchronization.",
   "files": []

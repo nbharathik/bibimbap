@@ -36,6 +36,12 @@ Model performance by category and overall average score (%). Each category conta
 pip install -r requirements.txt
 ```
 
+### Download Prompts and IFC Files
+
+```bash
+python scripts/download_data.py
+```
+
 ### Configuration
 
 1. Set up environment variables:
