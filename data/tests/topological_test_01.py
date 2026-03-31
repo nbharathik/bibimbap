@@ -1,90 +1,114 @@
+"""
+Topological Test 01 - CREATE: Wall to Enclose Room
+====================================================
+
+Prompt:
+    "Add a wall to the room with the id 3_DHXxtdb3wRKlXgyMiH4s
+    so that it gets fully enclosed."
+
+IFC file: 01/02/01_02_001.ifc
+Category: Topological / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcWall that closes an open side of
+    the referenced room (IfcSpace). The wall must be at a room boundary and
+    its length must match the room opening dimension.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcWall was created.
+
+    right_dimensions (bool):
+        True if the wall length matches one of the room dimensions (±0.5m).
+
+    right_location (bool):
+        True if the wall is at one of the room boundaries (±0.5m).
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
+from .utils.create_utils import (
+    find_new_elements, get_bbox, get_shape_dims, within_abs,
+    compute_integrity, check_is_correct_type,
+    check_spatial_containment, check_elements_preserved,
+)
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Add a wall to the room with the id "GlobalId = "3_DHXxtdb3wRKlXgyMiH4s"
-        so that it gets fully enclosed")."""
+    """Prompt: Add a wall to the room with the id 3_DHXxtdb3wRKlXgyMiH4s so that it gets fully enclosed."""
     metrics = {
-        "object_exists": False, 
+        "object_exists": False,
         "right_location": False,
         "right_dimensions": False,
-        "integrity_constraint": False,  # NEW
+        "integrity_constraint": 0.0,
     }
+
+    ROOM_GUID = "3_DHXxtdb3wRKlXgyMiH4s"
+    TOL = 0.5
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # check if there is a new wall
-    original_wall_guids = set(wall.GlobalId for wall in ifc_original.by_type("IfcWall"))
-    edited_wall_guids = set(wall.GlobalId for wall in ifc_edited.by_type("IfcWall"))
-
-    new_wall_ids = list(edited_wall_guids - original_wall_guids)
-    if len(new_wall_ids) == 0:
-        metrics["integrity_constraint"] = all(
-            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-        )
+    new_walls = find_new_elements(ifc_original, ifc_edited, "IfcWall")
+    if not new_walls:
         return metrics
 
     metrics["object_exists"] = True
-    wall = ifc_edited.by_guid(new_wall_ids[0])
 
-    # get wall geometry information
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, wall)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_wall = min(vertices[:, 0])
-    x_max_wall = max(vertices[:, 0])
-    y_min_wall = min(vertices[:, 1])
-    y_max_wall = max(vertices[:, 1])
-    z_min_wall = min(vertices[:, 2])
-    z_max_wall = max(vertices[:, 2])
+    if len(new_walls) != 1:
+        return metrics
 
-    width_wall = ifcopenshell.util.shape.get_x(geom)
-    height_wall = ifcopenshell.util.shape.get_z(geom)
-    thickness_wall = ifcopenshell.util.shape.get_y(geom)
-
-    # get room geometry information
+    wall = new_walls[0]
     try:
-        room = ifc_edited.by_guid("3_DHXxtdb3wRKlXgyMiH4s")
-        room_shape = ifcopenshell.geom.create_shape(settings, room)
-        room_geom = room_shape.geometry
-        room_vertices = ifcopenshell.util.shape.get_shape_vertices(room_shape, room_geom)
-        x_min_room = min(room_vertices[:, 0])
-        x_max_room = max(room_vertices[:, 0])
-        y_min_room = min(room_vertices[:, 1])
-        y_max_room = max(room_vertices[:, 1])
-        
-        width_room = ifcopenshell.util.shape.get_x(room_geom)
-        depth_room = ifcopenshell.util.shape.get_y(room_geom)
-        
-        # check if wall is at one of the room boundaries (right_location)
-        tolerance = 0.5
-        at_boundary = (
-            abs(x_min_wall - x_min_room) < tolerance or 
-            abs(x_max_wall - x_max_room) < tolerance or
-            abs(y_min_wall - y_min_room) < tolerance or 
-            abs(y_max_wall - y_max_room) < tolerance
-        )
-        print(x_min_wall)
-        print(x_min_room)
-        
-        if at_boundary:
-            metrics["right_location"] = True
-        
-        # check if wall dimensions match room opening (right_dimensions)
-        wall_length = max(width_wall, thickness_wall)
-        room_dimension = max(width_room, depth_room)
-        if abs(wall_length - room_dimension) < tolerance or abs(wall_length - min(width_room, depth_room)) < tolerance:
-            metrics["right_dimensions"] = True
-            
-    except Exception:
-        pass
+        wall_bbox = get_bbox(wall)
+    except RuntimeError:
+        return metrics
 
-    # NEW: integrity constraint = all other metrics are true
-    metrics["integrity_constraint"] = all(
-        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
+    wall_dims = get_shape_dims(wall)
+    if wall_dims is None:
+        return metrics
+    width_wall, thickness_wall, height_wall = wall_dims
+
+    # get room geometry
+    try:
+        room = ifc_edited.by_guid(ROOM_GUID)
+        room_bbox = get_bbox(room)
+        room_dims = get_shape_dims(room)
+    except RuntimeError:
+        sub_checks = [
+            check_is_correct_type(wall, "IfcWall"),
+            check_spatial_containment(ifc_edited, wall),
+            check_elements_preserved(ifc_original, ifc_edited),
+        ]
+        metrics["integrity_constraint"] = compute_integrity(sub_checks)
+        return metrics
+
+    width_room, depth_room, height_room = room_dims
+
+    # right_location: wall at a room boundary
+    at_boundary = (
+        within_abs(wall_bbox["x_min"], room_bbox["x_min"], TOL) or
+        within_abs(wall_bbox["x_max"], room_bbox["x_max"], TOL) or
+        within_abs(wall_bbox["y_min"], room_bbox["y_min"], TOL) or
+        within_abs(wall_bbox["y_max"], room_bbox["y_max"], TOL)
     )
-    return metrics
+    if at_boundary:
+        metrics["right_location"] = True
 
+    # right_dimensions: wall length matches a room dimension
+    wall_length = max(width_wall, thickness_wall)
+    if (within_abs(wall_length, width_room, TOL) or
+            within_abs(wall_length, depth_room, TOL)):
+        metrics["right_dimensions"] = True
+
+    # integrity
+    sub_checks = [
+        check_is_correct_type(wall, "IfcWall"),
+        check_spatial_containment(ifc_edited, wall),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
+
+    return metrics

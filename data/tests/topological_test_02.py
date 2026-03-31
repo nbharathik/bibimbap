@@ -1,99 +1,106 @@
+"""
+Topological Test 02 - CREATE: Column in Inner Space of Walls
+=============================================================
+
+Prompt:
+    "Insert a column to the inner space of the walls with ids
+    3_DHXxtdb3wRKlXgyMiHOP, 3_DHXxtdb3wRKlXgyMiHR$,
+    3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08."
+
+IFC file: 01/02/01_02_002.ifc
+Category: Topological / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcColumn placed inside the area
+    enclosed by the 4 referenced walls.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcColumn was created.
+
+    right_dimensions (bool):
+        True if the column has reasonable dimensions (width/depth 0.1-2.0m,
+        height > 1.0m). No specific dimensions are given in the prompt.
+
+    right_location (bool):
+        True if the column center is within the bounding box of the 4 walls (±0.5m).
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
+from .utils.create_utils import (
+    find_new_elements, get_bbox, point_in_bbox_xy,
+    compute_integrity, check_is_correct_type,
+    check_spatial_containment, check_elements_preserved,
+)
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Insert a column to the inner sapace of the walls with ids [GlobalId = "3_DHXxtdb3wRKlXgyMiHOP",
-    GlobalId = "3_DHXxtdb3wRKlXgyMiHR$", GlobalId = "3_DHXxtdb3wRKlXgyMiH5o", GlobalId = "1IMYx2Ej12vu3iYKHoTn08"]")."""
+    """Prompt: Insert a column to the inner space of the walls with ids [3_DHXxtdb3wRKlXgyMiHOP, 3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08]."""
     metrics = {
         "object_exists": False,
         "right_location": False,
         "right_dimensions": False,
-        "integrity_constraint": False,  # NEW
+        "integrity_constraint": 0.0,
     }
+
+    WALL_IDS = ["3_DHXxtdb3wRKlXgyMiHOP", "3_DHXxtdb3wRKlXgyMiHR$",
+                "3_DHXxtdb3wRKlXgyMiH5o", "1IMYx2Ej12vu3iYKHoTn08"]
+    TOL = 0.5
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # check if there is a new column
-    original_column_guids = set(col.GlobalId for col in ifc_original.by_type("IfcColumn"))
-    edited_column_guids = set(col.GlobalId for col in ifc_edited.by_type("IfcColumn"))
-
-    new_column_ids = list(edited_column_guids - original_column_guids)
-    if len(new_column_ids) == 0:
-        metrics["integrity_constraint"] = all(
-            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-        )
+    new_columns = find_new_elements(ifc_original, ifc_edited, "IfcColumn")
+    if not new_columns:
         return metrics
 
     metrics["object_exists"] = True
-    column = ifc_edited.by_guid(new_column_ids[0])
 
-    # get column geometry information
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, column)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_col = min(vertices[:, 0])
-    x_max_col = max(vertices[:, 0])
-    y_min_col = min(vertices[:, 1])
-    y_max_col = max(vertices[:, 1])
-    z_min_col = min(vertices[:, 2])
-    z_max_col = max(vertices[:, 2])
+    if len(new_columns) != 1:
+        return metrics
 
-    # column center point
-    col_center_x = (x_min_col + x_max_col) / 2
-    col_center_y = (y_min_col + y_max_col) / 2
-
-    # get wall geometry information to determine the inner space
-    wall_ids = ["3_DHXxtdb3wRKlXgyMiHOP", "3_DHXxtdb3wRKlXgyMiHR$",
-                "3_DHXxtdb3wRKlXgyMiH5o", "1IMYx2Ej12vu3iYKHoTn08"]
-
+    column = new_columns[0]
     try:
-        wall_bounds = []
-        for wall_id in wall_ids:
-            try:
-                wall = ifc_edited.by_guid(wall_id)
-                wall_shape = ifcopenshell.geom.create_shape(settings, wall)
-                wall_geom = wall_shape.geometry
-                wall_vertices = ifcopenshell.util.shape.get_shape_vertices(wall_shape, wall_geom)
-                wall_bounds.append({
-                    'x_min': min(wall_vertices[:, 0]),
-                    'x_max': max(wall_vertices[:, 0]),
-                    'y_min': min(wall_vertices[:, 1]),
-                    'y_max': max(wall_vertices[:, 1])
-                })
-            except:
-                continue
+        col_bbox = get_bbox(column)
+    except RuntimeError:
+        return metrics
 
-        if len(wall_bounds) >= 4:
-            # calculate the bounding box of the inner space
-            x_min_space = min(wb['x_min'] for wb in wall_bounds)
-            x_max_space = max(wb['x_max'] for wb in wall_bounds)
-            y_min_space = min(wb['y_min'] for wb in wall_bounds)
-            y_max_space = max(wb['y_max'] for wb in wall_bounds)
+    # right_dimensions: reasonable column size
+    if (0.1 <= col_bbox["x_len"] <= 2.0 and
+        0.1 <= col_bbox["y_len"] <= 2.0 and
+        col_bbox["z_len"] > 1.0):
+        metrics["right_dimensions"] = True
 
-            # check if column center is within the inner space
-            tolerance = 1.0
-            if (x_min_space - tolerance <= col_center_x <= x_max_space + tolerance and
-                y_min_space - tolerance <= col_center_y <= y_max_space + tolerance):
-                metrics["right_location"] = True
+    # get wall bounding boxes to determine inner space
+    wall_bboxes = []
+    for wall_id in WALL_IDS:
+        try:
+            wall = ifc_edited.by_guid(wall_id)
+            wall_bboxes.append(get_bbox(wall))
+        except RuntimeError:
+            continue
 
-            # check if column has reasonable dimensions (not too small, not too large)
-            col_width = x_max_col - x_min_col
-            col_depth = y_max_col - y_min_col
-            col_height = z_max_col - z_min_col
+    if len(wall_bboxes) >= 4:
+        # inner space bounding box
+        space_bbox = {
+            "x_min": min(wb["x_min"] for wb in wall_bboxes),
+            "x_max": max(wb["x_max"] for wb in wall_bboxes),
+            "y_min": min(wb["y_min"] for wb in wall_bboxes),
+            "y_max": max(wb["y_max"] for wb in wall_bboxes),
+        }
 
-            # typical column dimensions: 0.2m to 1.0m for width/depth
-            if (0.1 <= col_width <= 2.0 and 0.1 <= col_depth <= 2.0 and col_height > 1.0):
-                metrics["right_dimensions"] = True
+        if point_in_bbox_xy(col_bbox["x_c"], col_bbox["y_c"], space_bbox, tol=TOL):
+            metrics["right_location"] = True
 
-    except Exception:
-        pass
+    # integrity
+    sub_checks = [
+        check_is_correct_type(column, "IfcColumn"),
+        check_spatial_containment(ifc_edited, column),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
 
-    # NEW: integrity constraint = all other metrics are true
-    metrics["integrity_constraint"] = all(
-        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-    )
     return metrics
-

@@ -1,117 +1,125 @@
+"""
+Topological Test 04 - CREATE: Slab Closing Walls
+==================================================
+
+Prompt:
+    "Create a slab that closes the elements with the ids
+    3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiHOP,
+    3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08."
+
+IFC file: 01/02/01_02_004.ifc
+Category: Topological / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcSlab that covers the area enclosed
+    by the 4 referenced walls, positioned at the top or bottom of the walls.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcSlab was created.
+
+    right_dimensions (bool):
+        True if the slab dimensions match the enclosed area (±1m per dimension
+        or within 20% of the area).
+
+    right_location (bool):
+        True if the slab is at floor or ceiling level of the walls AND
+        overlaps with the enclosed area in the XY plane.
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
+from .utils.create_utils import (
+    find_new_elements, get_bbox, get_shape_dims, within_abs,
+    compute_integrity, check_is_correct_type,
+    check_spatial_containment, check_elements_preserved,
+)
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Create a slab that closes the elements with the ids [GlobalId = "3_DHXxtdb3wRKlXgyMiHR$", 
-    GlobalId = "3_DHXxtdb3wRKlXgyMiHOP", GlobalId = "3_DHXxtdb3wRKlXgyMiH5o", GlobalId = "1IMYx2Ej12vu3iYKHoTn08"] ."""
+    """Prompt: Create a slab that closes the elements with the ids [3_DHXxtdb3wRKlXgyMiHR$, 3_DHXxtdb3wRKlXgyMiHOP, 3_DHXxtdb3wRKlXgyMiH5o, 1IMYx2Ej12vu3iYKHoTn08]."""
     metrics = {
         "object_exists": False,
         "right_location": False,
         "right_dimensions": False,
-        "integrity_constraint": False,  # NEW
+        "integrity_constraint": 0.0,
     }
+
+    WALL_IDS = ["3_DHXxtdb3wRKlXgyMiHR$", "3_DHXxtdb3wRKlXgyMiHOP",
+                "3_DHXxtdb3wRKlXgyMiH5o", "1IMYx2Ej12vu3iYKHoTn08"]
+    TOL = 1.0
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # check if there is a new slab
-    original_slab_guids = set(slab.GlobalId for slab in ifc_original.by_type("IfcSlab"))
-    edited_slab_guids = set(slab.GlobalId for slab in ifc_edited.by_type("IfcSlab"))
-
-    new_slab_ids = list(edited_slab_guids - original_slab_guids)
-    if len(new_slab_ids) == 0:
-        metrics["integrity_constraint"] = all(
-            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-        )
+    new_slabs = find_new_elements(ifc_original, ifc_edited, "IfcSlab")
+    if not new_slabs:
         return metrics
 
     metrics["object_exists"] = True
-    slab = ifc_edited.by_guid(new_slab_ids[0])
 
-    # get slab geometry information
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, slab)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_slab = min(vertices[:, 0])
-    x_max_slab = max(vertices[:, 0])
-    y_min_slab = min(vertices[:, 1])
-    y_max_slab = max(vertices[:, 1])
-    z_min_slab = min(vertices[:, 2])
-    z_max_slab = max(vertices[:, 2])
+    if len(new_slabs) != 1:
+        return metrics
 
-    slab_width = ifcopenshell.util.shape.get_x(geom)
-    slab_depth = ifcopenshell.util.shape.get_y(geom)
-    slab_thickness = ifcopenshell.util.shape.get_z(geom)
-
-    # get wall geometry information to determine the enclosed area
-    wall_ids = ["3_DHXxtdb3wRKlXgyMiHR$", "3_DHXxtdb3wRKlXgyMiHOP",
-                "3_DHXxtdb3wRKlXgyMiH5o", "1IMYx2Ej12vu3iYKHoTn08"]
-
+    slab = new_slabs[0]
     try:
-        wall_bounds = []
-        wall_heights = []
-        for wall_id in wall_ids:
-            try:
-                wall = ifc_edited.by_guid(wall_id)
-                wall_shape = ifcopenshell.geom.create_shape(settings, wall)
-                wall_geom = wall_shape.geometry
-                wall_vertices = ifcopenshell.util.shape.get_shape_vertices(wall_shape, wall_geom)
-                wall_bounds.append({
-                    'x_min': min(wall_vertices[:, 0]),
-                    'x_max': max(wall_vertices[:, 0]),
-                    'y_min': min(wall_vertices[:, 1]),
-                    'y_max': max(wall_vertices[:, 1]),
-                    'z_min': min(wall_vertices[:, 2]),
-                    'z_max': max(wall_vertices[:, 2])
-                })
-                wall_heights.append(max(wall_vertices[:, 2]))
-            except:
-                continue
+        slab_bbox = get_bbox(slab)
+    except RuntimeError:
+        return metrics
 
-        if len(wall_bounds) >= 4:
-            # calculate the bounding box of the enclosed area
-            x_min_space = min(wb['x_min'] for wb in wall_bounds)
-            x_max_space = max(wb['x_max'] for wb in wall_bounds)
-            y_min_space = min(wb['y_min'] for wb in wall_bounds)
-            y_max_space = max(wb['y_max'] for wb in wall_bounds)
-            z_max_walls = max(wall_heights)
-            z_min_walls = min(wb['z_min'] for wb in wall_bounds)
+    slab_dims = get_shape_dims(slab)
+    if slab_dims is None:
+        return metrics
+    slab_width, slab_depth, slab_thickness = slab_dims
 
-            space_width = x_max_space - x_min_space
-            space_depth = y_max_space - y_min_space
+    # get wall bounding boxes
+    wall_bboxes = []
+    for wall_id in WALL_IDS:
+        try:
+            wall = ifc_edited.by_guid(wall_id)
+            wall_bboxes.append(get_bbox(wall))
+        except RuntimeError:
+            continue
 
-            # check if slab dimensions match the enclosed area (right_dimensions)
-            tolerance = 1.0
-            slab_area = slab_width * slab_depth
-            space_area = space_width * space_depth
+    if len(wall_bboxes) >= 4:
+        x_min_space = min(wb["x_min"] for wb in wall_bboxes)
+        x_max_space = max(wb["x_max"] for wb in wall_bboxes)
+        y_min_space = min(wb["y_min"] for wb in wall_bboxes)
+        y_max_space = max(wb["y_max"] for wb in wall_bboxes)
+        z_max_walls = max(wb["z_max"] for wb in wall_bboxes)
+        z_min_walls = min(wb["z_min"] for wb in wall_bboxes)
 
-            # slab should roughly cover the enclosed area
-            if abs(slab_width - space_width) < tolerance and abs(slab_depth - space_depth) < tolerance:
-                metrics["right_dimensions"] = True
-            elif abs(slab_area - space_area) < (space_area * 0.3):  # within 30% of area
-                metrics["right_dimensions"] = True
+        space_width = x_max_space - x_min_space
+        space_depth = y_max_space - y_min_space
 
-            # check if slab is positioned at the top or bottom of walls (right_location)
-            slab_z_center = (z_min_slab + z_max_slab) / 2
+        # right_dimensions
+        slab_area = slab_width * slab_depth
+        space_area = space_width * space_depth
 
-            at_floor = abs(slab_z_center - z_min_walls) < tolerance
-            at_ceiling = abs(slab_z_center - z_max_walls) < tolerance
+        if (within_abs(slab_width, space_width, TOL) and within_abs(slab_depth, space_depth, TOL)):
+            metrics["right_dimensions"] = True
+        elif space_area > 0 and abs(slab_area - space_area) < (space_area * 0.2):
+            metrics["right_dimensions"] = True
 
-            # also check if slab overlaps with the enclosed area in x,y plane
-            x_overlap = not (x_max_slab < x_min_space - tolerance or x_min_slab > x_max_space + tolerance)
-            y_overlap = not (y_max_slab < y_min_space - tolerance or y_min_slab > y_max_space + tolerance)
+        # right_location: at floor or ceiling + overlaps in XY
+        slab_z_center = slab_bbox["z_c"]
+        at_floor = within_abs(slab_z_center, z_min_walls, TOL)
+        at_ceiling = within_abs(slab_z_center, z_max_walls, TOL)
 
-            if (at_floor or at_ceiling) and x_overlap and y_overlap:
-                metrics["right_location"] = True
+        x_overlap = not (slab_bbox["x_max"] < x_min_space - TOL or slab_bbox["x_min"] > x_max_space + TOL)
+        y_overlap = not (slab_bbox["y_max"] < y_min_space - TOL or slab_bbox["y_min"] > y_max_space + TOL)
 
-    except Exception:
-        pass
+        if (at_floor or at_ceiling) and x_overlap and y_overlap:
+            metrics["right_location"] = True
 
-    # NEW: integrity constraint = all other metrics are true
-    metrics["integrity_constraint"] = all(
-        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-    )
+    # integrity
+    sub_checks = [
+        check_is_correct_type(slab, "IfcSlab"),
+        check_spatial_containment(ifc_edited, slab),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
+
     return metrics
-
