@@ -1,9 +1,19 @@
+from pathlib import Path
+import sys
+
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.shape
 
 
-WALL_GUIDS = [
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from integrity_utils import run_integrity_check
+
+
+TARGET_GUIDS = [
     "3PQZwOmmD1hgPWgX4XFLJO",
     "3PQZwOmmD1hgPWgX4XFLJP",
     "3PQZwOmmD1hgPWgX4XFLJQ",
@@ -11,6 +21,11 @@ WALL_GUIDS = [
     "3PQZwOmmD1hgPWgX4XFLJV",
     "3PQZwOmmD1hgPWgX4XFLJU",
 ]
+
+UNIT_SCALE = 1.0
+HEIGHT_REDUCTION = 0.5
+HEIGHT_TOLERANCE = 0.05
+LOCATION_TOLERANCE = 0.05
 
 
 def _bbox_in_meters(product, unit_scale):
@@ -37,35 +52,69 @@ def _bbox_in_meters(product, unit_scale):
         "x_len": x_max - x_min,
         "y_len": y_max - y_min,
         "z_len": z_max - z_min,
-        "x_c": (x_min + x_max) / 2.0,
-        "y_c": (y_min + y_max) / 2.0,
-        "z_c": (z_min + z_max) / 2.0,
+        "x_center": (x_min + x_max) / 2.0,
+        "y_center": (y_min + y_max) / 2.0,
+        "z_center": (z_min + z_max) / 2.0,
     }
 
 
-def _within_abs(value, expected, tol):
-    return abs(value - expected) <= tol
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
 
 
-def _safe_by_guid(ifc, guid: str):
+def _safe_by_guid(ifc_model, guid):
     try:
-        return ifc.by_guid(guid)
+        return ifc_model.by_guid(guid)
     except Exception:
         return None
 
 
+def _load_models(ifc_file, edited_ifc_file):
+    try:
+        return ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return None, None
+
+
+def _get_target_wall_pairs(ifc_original, ifc_edited):
+    wall_pairs = []
+    for guid in TARGET_GUIDS:
+        wall_original = _safe_by_guid(ifc_original, guid)
+        wall_edited = _safe_by_guid(ifc_edited, guid)
+        if wall_original is None or wall_edited is None:
+            return None
+        wall_pairs.append((wall_original, wall_edited))
+    return wall_pairs
+
+
+def _wall_height_and_location_ok(wall_original, wall_edited):
+    bbox_original = _bbox_in_meters(wall_original, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(wall_edited, UNIT_SCALE)
+
+    height_diff = bbox_original["z_len"] - bbox_edited["z_len"]
+    height_ok = _within_abs(height_diff, HEIGHT_REDUCTION, HEIGHT_TOLERANCE)
+    location_ok = (
+        _within_abs(
+            bbox_original["x_center"],
+            bbox_edited["x_center"],
+            LOCATION_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_original["y_center"],
+            bbox_edited["y_center"],
+            LOCATION_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_original["z_min"],
+            bbox_edited["z_min"],
+            LOCATION_TOLERANCE,
+        )
+    )
+    return height_ok, location_ok
+
+
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: decrease the height of all walls by 0.5 m on the 2nd storey.
-
-    Expected behavior:
-    - All walls with the specified GUIDs should have their height reduced by 0.5m.
-    - All specified walls should still exist in the edited IFC.
-
-    Metrics:
-    - all_walls_exist: All 6 walls are still present
-    - all_heights_reduced_correctly: All walls have height reduced by 0.5m (±0.05m tolerance)
-    - Individual wall checks: wall_{i}_height_correct for each wall
-    """
+    del model_output
 
     metrics = {
         "integrity_constraint": False,
@@ -73,52 +122,41 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "right_location": False,
     }
 
-    try:
-        ifc_original = ifcopenshell.open(ifc_file)
-        ifc_edited = ifcopenshell.open(edited_ifc_file)
-    except Exception:
+    ifc_original, ifc_edited = _load_models(ifc_file, edited_ifc_file)
+    if ifc_original is None or ifc_edited is None:
         return metrics
 
-    unit_scale = 1.0
-    height_reduction = 0.5
-    height_tolerance = 0.05
+    wall_pairs = _get_target_wall_pairs(ifc_original, ifc_edited)
+    if wall_pairs is None:
+        return metrics
 
-    walls_original = []
-    walls_edited = []
-    
-    for guid in WALL_GUIDS:
-        wall_orig = _safe_by_guid(ifc_original, guid)
-        wall_edit = _safe_by_guid(ifc_edited, guid)
-        
-        if wall_orig is None or wall_edit is None:
-            return metrics
-        
-        walls_original.append(wall_orig)
-        walls_edited.append(wall_edit)
-
-    # Compare heights and check if reduced by 0.5m
     heights_correct = []
-    for idx, (wall_orig, wall_edit) in enumerate(zip(walls_original, walls_edited)):
+    locations_correct = []
+    for wall_original, wall_edited in wall_pairs:
         try:
-            bbox_orig = _bbox_in_meters(wall_orig, unit_scale)
-            bbox_edit = _bbox_in_meters(wall_edit, unit_scale)
-            
-            original_height = bbox_orig["z_len"]
-            edited_height = bbox_edit["z_len"]
-            height_diff = original_height - edited_height
-            
-            is_correct = _within_abs(height_diff, height_reduction, height_tolerance)
-            # metrics[f"wall_{idx+1}_height_correct"] = is_correct
-            heights_correct.append(is_correct)
+            height_ok, location_ok = _wall_height_and_location_ok(
+                wall_original,
+                wall_edited,
+            )
         except Exception:
-            heights_correct.append(False)
-            continue
-    
-    metrics["integrity_constraint"] = all(
-        wall_orig.is_a("IfcWall") and wall_edit.is_a("IfcWall")
-        for wall_orig, wall_edit in zip(walls_original, walls_edited)
-    )
-    metrics["right_dimensions"] = all(heights_correct)
-    metrics["right_location"] = metrics["right_dimensions"]
+            height_ok = False
+            location_ok = False
 
+        heights_correct.append(height_ok)
+        locations_correct.append(location_ok)
+
+    metrics["right_dimensions"] = all(heights_correct)
+    metrics["right_location"] = all(locations_correct)
+    metrics["integrity_constraint"] = run_integrity_check(
+        ifc_file,
+        edited_ifc_file,
+        target_guids=TARGET_GUIDS,
+    )
     return metrics
+
+
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "01" / "01" / "01_01_011.ifc"
+    edited_ifc_file = data_dir / "solutions" / "geometry_11.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))

@@ -1,15 +1,30 @@
-import math
+from pathlib import Path
+import sys
+
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.shape
 
 
-WINDOW_GUIDS = [
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from data.tests.integrity_utils import check_integrity
+
+
+TARGET_GUIDS = [
     "2KbOAL4v52mv2YJ6fTql5D",
     "2KbOAL4v52mv2YJ6fTql5C",
     "2KbOAL4v52mv2YJ6fTql5F",
     "2KbOAL4v52mv2YJ6fTql5A",
+    "2FgYNxuD5JBSJ92imotdSQ",
 ]
+
+UNIT_SCALE = 1.0
+EXPECTED_X_MOVEMENT = 3.0
+MOVEMENT_TOLERANCE = 0.1
+DIMENSION_TOLERANCE = 0.05
 
 
 def _bbox_in_meters(product, unit_scale):
@@ -36,33 +51,89 @@ def _bbox_in_meters(product, unit_scale):
         "x_len": x_max - x_min,
         "y_len": y_max - y_min,
         "z_len": z_max - z_min,
-        "x_c": (x_min + x_max) / 2.0,
-        "y_c": (y_min + y_max) / 2.0,
-        "z_c": (z_min + z_max) / 2.0,
+        "x_center": (x_min + x_max) / 2.0,
+        "y_center": (y_min + y_max) / 2.0,
+        "z_center": (z_min + z_max) / 2.0,
     }
 
 
-def _within_abs(value, expected, tol):
-    return abs(value - expected) <= tol
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
 
 
-def _safe_by_guid(ifc, guid: str):
+def _safe_by_guid(ifc_model, guid):
     try:
-        return ifc.by_guid(guid)
+        return ifc_model.by_guid(guid)
     except Exception:
         return None
 
 
+def _load_models(ifc_file, edited_ifc_file):
+    try:
+        return ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return None, None
+
+
+def _get_target_pairs(ifc_original, ifc_edited):
+    target_pairs = []
+    for guid in TARGET_GUIDS:
+        original = _safe_by_guid(ifc_original, guid)
+        edited = _safe_by_guid(ifc_edited, guid)
+        if original is None or edited is None:
+            return None
+        target_pairs.append((original, edited))
+    return target_pairs
+
+
+def _location_ok(original, edited):
+    bbox_original = _bbox_in_meters(original, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(edited, UNIT_SCALE)
+
+    return (
+        _within_abs(
+            bbox_edited["x_center"] - bbox_original["x_center"],
+            EXPECTED_X_MOVEMENT,
+            MOVEMENT_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["y_center"] - bbox_original["y_center"],
+            0.0,
+            MOVEMENT_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["z_center"] - bbox_original["z_center"],
+            0.0,
+            MOVEMENT_TOLERANCE,
+        )
+    )
+
+
+def _dimensions_ok(original, edited):
+    bbox_original = _bbox_in_meters(original, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(edited, UNIT_SCALE)
+
+    return (
+        _within_abs(
+            bbox_edited["x_len"],
+            bbox_original["x_len"],
+            DIMENSION_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["y_len"],
+            bbox_original["y_len"],
+            DIMENSION_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["z_len"],
+            bbox_original["z_len"],
+            DIMENSION_TOLERANCE,
+        )
+    )
+
+
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: move the window by 3m along the x axis which is wider than 1.50m
-
-    Expected behavior:
-    - All window objects (4 GUIDs) should be moved by 3m in positive X direction.
-    - All window objects should still exist in the edited IFC.
-
-    Metrics:
-    - right_location: All window objects moved by 3m (±0.1m tolerance) along X-axis
-    """
+    del model_output
 
     metrics = {
         "integrity_constraint": False,
@@ -70,54 +141,36 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "right_location": False,
     }
 
-    try:
-        ifc_original = ifcopenshell.open(ifc_file)
-        ifc_edited = ifcopenshell.open(edited_ifc_file)
-    except Exception:
+    ifc_original, ifc_edited = _load_models(ifc_file, edited_ifc_file)
+    if ifc_original is None or ifc_edited is None:
         return metrics
 
-    unit_scale = 1.0
-    expected_movement = 3.0
-    movement_tolerance = 0.1
+    target_pairs = _get_target_pairs(ifc_original, ifc_edited)
+    if target_pairs is None:
+        return metrics
 
-    window_objects_original = []
-    window_objects_edited = []
-    
-    for guid in WINDOW_GUIDS:
-        obj_orig = _safe_by_guid(ifc_original, guid)
-        obj_edit = _safe_by_guid(ifc_edited, guid)
-        
-        if obj_orig is None or obj_edit is None:
-            return metrics
-        
-        window_objects_original.append(obj_orig)
-        window_objects_edited.append(obj_edit)
-
-    all_moved_correctly = True
-    
-    for obj_orig, obj_edit in zip(window_objects_original, window_objects_edited):
+    location_results = []
+    dimension_results = []
+    for original, edited in target_pairs:
         try:
-            bbox_orig = _bbox_in_meters(obj_orig, unit_scale)
-            bbox_edit = _bbox_in_meters(obj_edit, unit_scale)
-            
-            x_movement = bbox_edit["x_c"] - bbox_orig["x_c"]
-            
-            if not _within_abs(x_movement, expected_movement, movement_tolerance):
-                all_moved_correctly = False
-                break
-            
-            y_movement = abs(bbox_edit["y_c"] - bbox_orig["y_c"])
-            z_movement = abs(bbox_edit["z_c"] - bbox_orig["z_c"])
-            
-            if y_movement > 0.1 or z_movement > 0.1:
-                all_moved_correctly = False
-                break
-                
+            location_results.append(_location_ok(original, edited))
+            dimension_results.append(_dimensions_ok(original, edited))
         except Exception:
-            all_moved_correctly = False
-            break
+            location_results.append(False)
+            dimension_results.append(False)
 
-    metrics["right_location"] = all_moved_correctly
-    metrics["integrity_constraint"] = all(_safe_by_guid(ifc_edited, guid) is not None for guid in WINDOW_GUIDS)
-    metrics["right_dimensions"] = metrics["right_location"]
+    metrics["right_location"] = all(location_results)
+    metrics["right_dimensions"] = all(dimension_results)
+    metrics["integrity_constraint"] = bool(check_integrity(
+        ifc_original,
+        ifc_edited,
+        list_of_targets=TARGET_GUIDS,
+    ).get("integrity_constraint", False))
     return metrics
+
+
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "01" / "01" / "01_01_013.ifc"
+    edited_ifc_file = data_dir / "solutions" / "geometry_13.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))

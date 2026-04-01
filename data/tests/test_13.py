@@ -1,157 +1,229 @@
+from pathlib import Path
+import sys
+
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.shape
 
 
-def check_move_z_axis(guid, ifc_file, edited_ifc_file, metrics, ifc_identifier):
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-    ifc_original = ifcopenshell.open(ifc_file)
-    object_to_move = ifc_original.by_guid(guid)
+from data.tests.integrity_utils import check_integrity
+from data.updated_tests._integrity_utils import filled_opening_guid
 
-    matrix = ifcopenshell.util.placement.get_local_placement(object_to_move.ObjectPlacement)
-    placement_original = matrix[:, 3:][0:3]  # in mm
 
-    x_object_to_move, y_object_to_move, z_object_to_move = list(map(lambda x: x / 1000, placement_original))  # converted to m
+WINDOW_GUID = "11kJIqz$n2Jf_DfJV1SDbS"
+OPENING_GUID_FALLBACK = "0APGbZXNKfgPNB$VQQZ0pi"
+PROXY_GUID = "11kJIqz$n2Jf_DfJV1SDbO"
+PROXY_GUID_2 = "11kJIqz$n2Jf_DfJV1SDbP"
+EXPECTED_DELTA_Z_M = 0.5
+POSITION_TOLERANCE_M = 0.1
+DIMENSION_TOLERANCE_M = 0.1
 
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, object_to_move)
-    geom = shape.geometry
-    width_object_to_move = ifcopenshell.util.shape.get_x(geom)
-    height_object_to_move = ifcopenshell.util.shape.get_z(geom)
-    thickness_object_to_move = ifcopenshell.util.shape.get_y(geom)
 
-    ifc_edited = ifcopenshell.open(edited_ifc_file)
+def _safe_by_guid(ifc_model, guid):
     try:
-        edited_object = ifc_edited.by_guid(guid)
-    except RuntimeError:
-        # object to move does not exist in edited file
-        # check if there is a new object and use this instead
-        original_object_guids = set(object.GlobalId for object in ifc_original.by_type(ifc_identifier))
-        edited_object_guids = set(object.GlobalId for object in ifc_edited.by_type(ifc_identifier))
-        new_object_ids = list(edited_object_guids - original_object_guids)
-        if len(new_object_ids) == 0:
-            # original object not existent and no new one? -> task failed
-            return metrics
-        # new object will be used for tests
-        edited_object = ifc_edited.by_guid(new_object_ids[0])
+        return ifc_model.by_guid(guid)
+    except Exception:
+        return None
 
-    matrix = ifcopenshell.util.placement.get_local_placement(edited_object.ObjectPlacement)
 
-    placement_edited = matrix[:, 3:][0:3]
-    x_object_edited, y_object_edited, z_object_edited = list(map(lambda x: x / 1000, placement_edited))  # converted to m
+def _placement_xyz_m(product):
+    matrix = ifcopenshell.util.placement.get_local_placement(product.ObjectPlacement)
+    return tuple(float(matrix[index][3]) / 1000.0 for index in range(3))
 
-    # check if object was moved by 0.5 m in z axis and not in any other axis
-    if abs(x_object_edited - x_object_to_move) and abs(y_object_edited - y_object_to_move) and abs(z_object_edited - z_object_to_move + 0.5) < 0.1:
-        metrics["right_location"] = True
-    else:
-        # if the location is not right, that means simply nothing happened and therefore, the right dimensions does not matter
-        return metrics
 
+def _bbox_in_meters(product):
     settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, edited_object)
+    shape = ifcopenshell.geom.create_shape(settings, product)
     geom = shape.geometry
-    width_object = ifcopenshell.util.shape.get_x(geom)
-    height_object = ifcopenshell.util.shape.get_z(geom)
-    thickness_object = ifcopenshell.util.shape.get_y(geom)
+    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
 
-    # check if dimensions still the same
-    if abs(width_object_to_move - width_object) < 0.1 and abs(thickness_object_to_move - thickness_object) and abs(height_object_to_move - height_object):
-        metrics["right_dimensions"] = True
+    x_min = float(vertices[:, 0].min())
+    x_max = float(vertices[:, 0].max())
+    y_min = float(vertices[:, 1].min())
+    y_max = float(vertices[:, 1].max())
+    z_min = float(vertices[:, 2].min())
+    z_max = float(vertices[:, 2].max())
 
-    return metrics
-
-
-def check_height_increase(guid, ifc_file, edited_ifc_file, metrics, ifc_identifier):
-    ifc_original = ifcopenshell.open(ifc_file)
-    object_to_move = ifc_original.by_guid(guid)
-
-    matrix = ifcopenshell.util.placement.get_local_placement(object_to_move.ObjectPlacement)
-    placement_original = matrix[:, 3:][0:3]  # in mm
-
-    x_object_to_move, y_object_to_move, z_object_to_move = list(
-        map(lambda x: x / 1000, placement_original))  # converted to m
-
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, object_to_move)
-    geom = shape.geometry
-    width_object_to_move = ifcopenshell.util.shape.get_x(geom)
-    height_object_to_move = ifcopenshell.util.shape.get_z(geom)
-    thickness_object_to_move = ifcopenshell.util.shape.get_y(geom)
-
-    ifc_edited = ifcopenshell.open(edited_ifc_file)
-    try:
-        edited_object = ifc_edited.by_guid(guid)
-    except RuntimeError:
-        # object to move does not exist in edited file
-        # check if there is a new object and use this instead
-        original_object_guids = set(object.GlobalId for object in ifc_original.by_type(ifc_identifier))
-        edited_object_guids = set(object.GlobalId for object in ifc_edited.by_type(ifc_identifier))
-        new_object_ids = list(edited_object_guids - original_object_guids)
-        if len(new_object_ids) == 0:
-            # original object not existent and no new one? -> task failed
-            return metrics
-        # new object will be used for tests
-        edited_object = ifc_edited.by_guid(new_object_ids[0])
-
-    matrix = ifcopenshell.util.placement.get_local_placement(edited_object.ObjectPlacement)
-
-    placement_edited = matrix[:, 3:][0:3]
-    x_object_edited, y_object_edited, z_object_edited = list(
-        map(lambda x: x / 1000, placement_edited))  # converted to m
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, edited_object)
-    geom = shape.geometry
-    width_edited_object = ifcopenshell.util.shape.get_x(geom)
-    height_edited_object = ifcopenshell.util.shape.get_z(geom)
-    thickness_edited_object = ifcopenshell.util.shape.get_y(geom)
-
-
-    # check if object size was increased by 0.5 m
-    if height_object_to_move + 0.5 == height_edited_object and width_object_to_move == width_edited_object and thickness_object_to_move == thickness_edited_object:
-        metrics["right_dimensions"] = True
-    else:
-        # if no height increase, do not check if location is still the same
-        return metrics
-
-
-    # check if location is still the same
-    if x_object_edited == x_object_to_move and y_object_edited == y_object_to_move and z_object_edited == z_object_to_move:
-        metrics["right_location"] = True
-
-    return metrics
-
-def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Increase the height by 0.5 meters of the window with id 11kJIqz$n2Jf_DfJV1SDbS."""
-    metrics = {
-        "right_location": False,  # window is moved correctly
-        "right_dimensions": False,  # window has correct dims
-        "integrity_constraint": False # opening is also moved
+    return {
+        "x_len": x_max - x_min,
+        "y_len": y_max - y_min,
+        "z_len": z_max - z_min,
     }
 
-    metrics_z = metrics.copy()
 
-    metrics_height = metrics.copy()
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
 
-    # either move the window up
-    window_metrics_z = check_move_z_axis("11kJIqz$n2Jf_DfJV1SDbS", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcWindow")
-    integrity_metrics_z = check_move_z_axis("0APGbZXNKfgPNB$VQQZ0pi", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcOpeningElement")
 
-    metrics_z.update(window_metrics_z)
-    if sum(integrity_metrics_z.values()) == 2: # as there are 2 key in the dict
-        # if every value is true, the opening was moved correctly
-        metrics_z["integrity_constraint"] = True
+def _moved_up_by_expected_delta(original_product, edited_product):
+    original_x, original_y, original_z = _placement_xyz_m(original_product)
+    edited_x, edited_y, edited_z = _placement_xyz_m(edited_product)
+    return (
+        _within_abs(edited_x - original_x, 0.0, POSITION_TOLERANCE_M)
+        and _within_abs(edited_y - original_y, 0.0, POSITION_TOLERANCE_M)
+        and _within_abs(edited_z - original_z, EXPECTED_DELTA_Z_M, POSITION_TOLERANCE_M)
+    )
 
-    # or increase the size of the window
-    window_metrics_height = check_height_increase("11kJIqz$n2Jf_DfJV1SDbS", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcWindow")
-    integrity_metrics_height = check_height_increase("0APGbZXNKfgPNB$VQQZ0pi", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcOpeningElement")
 
-    metrics_height.update(window_metrics_height)
-    if sum(integrity_metrics_height.values()) == 2:  # as there are 2 key in the dict
-        # if every value is true, the opening was increased correctly
-        metrics_height["integrity_constraint"] = True
+def _placement_unchanged(original_product, edited_product):
+    original_x, original_y, original_z = _placement_xyz_m(original_product)
+    edited_x, edited_y, edited_z = _placement_xyz_m(edited_product)
+    return (
+        _within_abs(edited_x - original_x, 0.0, POSITION_TOLERANCE_M)
+        and _within_abs(edited_y - original_y, 0.0, POSITION_TOLERANCE_M)
+        and _within_abs(edited_z - original_z, 0.0, POSITION_TOLERANCE_M)
+    )
 
-    if sum(metrics_z.values()) > sum(metrics_height.values()):
-        return metrics_z
-    else:
-        return metrics_height
+
+def _dimensions_unchanged(original_product, edited_product):
+    original_bbox = _bbox_in_meters(original_product)
+    edited_bbox = _bbox_in_meters(edited_product)
+    return (
+        _within_abs(edited_bbox["x_len"], original_bbox["x_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(edited_bbox["y_len"], original_bbox["y_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(edited_bbox["z_len"], original_bbox["z_len"], DIMENSION_TOLERANCE_M)
+    )
+
+
+def _height_increased_by_expected_delta(original_product, edited_product):
+    original_bbox = _bbox_in_meters(original_product)
+    edited_bbox = _bbox_in_meters(edited_product)
+    return (
+        _within_abs(edited_bbox["x_len"], original_bbox["x_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(edited_bbox["y_len"], original_bbox["y_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(
+            edited_bbox["z_len"] - original_bbox["z_len"],
+            EXPECTED_DELTA_Z_M,
+            DIMENSION_TOLERANCE_M,
+        )
+    )
+
+
+def execute_test(ifc_file, edited_ifc_file, model_output):
+    """Prompt: Increase the height by 0.5 meters of the window with id
+    11kJIqz$n2Jf_DfJV1SDbS.
+
+    Expected behavior:
+    - In this benchmark, two outcomes are accepted:
+      1. The complete window assembly is moved up by 0.5 m.
+      2. The complete window assembly stays in place and increases in height by 0.5 m.
+    - The window, its opening, and the related proxies must all follow the same
+      accepted transformation.
+
+    Metrics:
+    - right_location: The window assembly either moves up by 0.5 m without X/Y drift
+      or stays in place for the resize variant.
+    - right_dimensions: The window assembly either keeps the same dimensions for the
+      move variant or gains 0.5 m in height for the resize variant.
+    - integrity_constraint: Only the window assembly targets change and the model stays
+      clash-free.
+    """
+    del model_output
+
+    base_metrics = {
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": False,
+    }
+
+    try:
+        ifc_original = ifcopenshell.open(ifc_file)
+        ifc_edited = ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return base_metrics
+
+    original_window = _safe_by_guid(ifc_original, WINDOW_GUID)
+    edited_window = _safe_by_guid(ifc_edited, WINDOW_GUID)
+    opening_guid = filled_opening_guid(ifc_original, WINDOW_GUID) or OPENING_GUID_FALLBACK
+    original_opening = _safe_by_guid(ifc_original, opening_guid)
+    edited_opening = _safe_by_guid(ifc_edited, opening_guid)
+    original_proxy = _safe_by_guid(ifc_original, PROXY_GUID)
+    edited_proxy = _safe_by_guid(ifc_edited, PROXY_GUID)
+    original_proxy_2 = _safe_by_guid(ifc_original, PROXY_GUID_2)
+    edited_proxy_2 = _safe_by_guid(ifc_edited, PROXY_GUID_2)
+
+    if (
+        original_window is None
+        or edited_window is None
+        or original_opening is None
+        or edited_opening is None
+        or original_proxy is None
+        or edited_proxy is None
+        or original_proxy_2 is None
+        or edited_proxy_2 is None
+    ):
+        return base_metrics
+
+    # Evaluate integrity independently of task scoring once the files and targets are valid.
+    result = check_integrity(
+        ifc_original,
+        ifc_edited,
+        list_of_targets=[WINDOW_GUID, opening_guid, PROXY_GUID, PROXY_GUID_2],
+    )
+    base_metrics["integrity_constraint"] = bool(result.get("integrity_constraint", False))
+
+    try:
+        # Accept either a pure upward move of the whole assembly or a pure height
+        # increase of the whole assembly. Every component has to match the same variant.
+        window_move_location_ok = _moved_up_by_expected_delta(original_window, edited_window)
+        opening_move_location_ok = _moved_up_by_expected_delta(original_opening, edited_opening)
+        proxy_move_location_ok = _moved_up_by_expected_delta(original_proxy, edited_proxy)
+        proxy_2_move_location_ok = _moved_up_by_expected_delta(original_proxy_2, edited_proxy_2)
+        window_move_dimensions_ok = _dimensions_unchanged(original_window, edited_window)
+        opening_move_dimensions_ok = _dimensions_unchanged(original_opening, edited_opening)
+        proxy_move_dimensions_ok = _dimensions_unchanged(original_proxy, edited_proxy)
+        proxy_2_move_dimensions_ok = _dimensions_unchanged(original_proxy_2, edited_proxy_2)
+        base_metrics["right_location"] = (
+            window_move_location_ok
+            and opening_move_location_ok
+            and proxy_move_location_ok
+            and proxy_2_move_location_ok
+        )
+        base_metrics["right_dimensions"] = (
+            window_move_dimensions_ok
+            and opening_move_dimensions_ok
+            and proxy_move_dimensions_ok
+            and proxy_2_move_dimensions_ok
+        )
+
+        window_resize_location_ok = _placement_unchanged(original_window, edited_window)
+        opening_resize_location_ok = _placement_unchanged(original_opening, edited_opening)
+        proxy_resize_location_ok = _placement_unchanged(original_proxy, edited_proxy)
+        proxy_2_resize_location_ok = _placement_unchanged(original_proxy_2, edited_proxy_2)
+        window_resize_dimensions_ok = _height_increased_by_expected_delta(original_window, edited_window)
+        opening_resize_dimensions_ok = _height_increased_by_expected_delta(original_opening, edited_opening)
+        proxy_resize_dimensions_ok = _height_increased_by_expected_delta(original_proxy, edited_proxy)
+        proxy_2_resize_dimensions_ok = _height_increased_by_expected_delta(original_proxy_2, edited_proxy_2)
+
+        resize_variant_location_ok = (
+            window_resize_location_ok
+            and opening_resize_location_ok
+            and proxy_resize_location_ok
+            and proxy_2_resize_location_ok
+        )
+        resize_variant_dimensions_ok = (
+            window_resize_dimensions_ok
+            and opening_resize_dimensions_ok
+            and proxy_resize_dimensions_ok
+            and proxy_2_resize_dimensions_ok
+        )
+
+        if resize_variant_location_ok and resize_variant_dimensions_ok:
+            base_metrics["right_location"] = True
+            base_metrics["right_dimensions"] = True
+    except Exception:
+        return base_metrics
+
+    return base_metrics
+
+
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "basic_tasks.ifc"
+    edited_ifc_file = data_dir / "solutions" / "test_13.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))

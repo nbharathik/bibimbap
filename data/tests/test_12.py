@@ -1,80 +1,140 @@
+from pathlib import Path
+import sys
+
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.shape
 
 
-def check_move_x_axis(guid, ifc_file, edited_ifc_file, metrics, ifc_identifier):
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-    ifc_original = ifcopenshell.open(ifc_file)
-    object_to_move = ifc_original.by_guid(guid)
+from data.tests.integrity_utils import check_integrity
+from data.updated_tests._integrity_utils import filled_opening_guid
 
-    matrix = ifcopenshell.util.placement.get_local_placement(object_to_move.ObjectPlacement)
-    placement_original = matrix[:, 3:][0:3]  # in mm
-    x_object_to_move, y_object_to_move, z_object_to_move = list(map(lambda x: x / 1000, placement_original))  # converted to m
 
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, object_to_move)
-    geom = shape.geometry
-    width_object_to_move = ifcopenshell.util.shape.get_x(geom)
-    height_object_to_move = ifcopenshell.util.shape.get_z(geom)
-    thickness_object_to_move = ifcopenshell.util.shape.get_y(geom)
+DOOR_GUID = "11kJIqz$n2Jf_DfJV1SDY7"
+OPENING_GUID_FALLBACK = "1U$$kq6emLyOkmIlVkRzzn"
+EXPECTED_DELTA_X_M = -1.0
+POSITION_TOLERANCE_M = 0.1
+DIMENSION_TOLERANCE_M = 0.1
 
-    ifc_edited = ifcopenshell.open(edited_ifc_file)
+
+def _safe_by_guid(ifc_model, guid):
     try:
-        edited_object = ifc_edited.by_guid(guid)
-    except RuntimeError:
-        # object to move does not exist in edited file
-        # check if there is a new object and use this instead
-        original_object_guids = set(object.GlobalId for object in ifc_original.by_type(ifc_identifier))
-        edited_object_guids = set(object.GlobalId for object in ifc_edited.by_type(ifc_identifier))
-        new_object_ids = list(edited_object_guids - original_object_guids)
-        if len(new_object_ids) == 0:
-            # original object not existent and no new one? -> task failed
-            return metrics
-        # new object will be used for tests
-        edited_object = ifc_edited.by_guid(new_object_ids[0])
+        return ifc_model.by_guid(guid)
+    except Exception:
+        return None
 
-    matrix = ifcopenshell.util.placement.get_local_placement(edited_object.ObjectPlacement)
 
-    placement_edited = matrix[:, 3:][0:3]
-    x_object_edited, y_object_edited, z_object_edited = list(map(lambda x: x / 1000, placement_edited))  # converted to m
+def _placement_xyz_m(product):
+    matrix = ifcopenshell.util.placement.get_local_placement(product.ObjectPlacement)
+    return tuple(float(matrix[index][3]) / 1000.0 for index in range(3))
 
-    # check if object was moved by 1 m in x axis and not in any other axis
-    if abs(x_object_edited - x_object_to_move + 1)  < 0.1  and abs(y_object_edited - y_object_to_move) < 0.1 and abs(z_object_edited - z_object_to_move) < 0.1:
-        metrics["right_location"] = True
-    else:
-        # if the location is not right, that means simply nothing happened and therefore, the right dimensions does not matter
-        return metrics
 
+def _bbox_in_meters(product):
     settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, edited_object)
+    shape = ifcopenshell.geom.create_shape(settings, product)
     geom = shape.geometry
-    width_object = ifcopenshell.util.shape.get_x(geom)
-    height_object = ifcopenshell.util.shape.get_z(geom)
-    thickness_object = ifcopenshell.util.shape.get_y(geom)
+    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
 
-    # check if dimensions still the same
-    if abs(width_object_to_move - width_object) < 0.1 and abs(thickness_object_to_move - thickness_object) < 0.1 and abs(height_object_to_move - height_object):
-        metrics["right_dimensions"] = True
+    x_min = float(vertices[:, 0].min())
+    x_max = float(vertices[:, 0].max())
+    y_min = float(vertices[:, 1].min())
+    y_max = float(vertices[:, 1].max())
+    z_min = float(vertices[:, 2].min())
+    z_max = float(vertices[:, 2].max())
 
-    return metrics
+    return {
+        "x_len": x_max - x_min,
+        "y_len": y_max - y_min,
+        "z_len": z_max - z_min,
+    }
+
+
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
+
+
+def _moved_by_expected_delta(original_product, edited_product):
+    original_x, original_y, original_z = _placement_xyz_m(original_product)
+    edited_x, edited_y, edited_z = _placement_xyz_m(edited_product)
+    return (
+        _within_abs(edited_x - original_x, EXPECTED_DELTA_X_M, POSITION_TOLERANCE_M)
+        and _within_abs(edited_y - original_y, 0.0, POSITION_TOLERANCE_M)
+        and _within_abs(edited_z - original_z, 0.0, POSITION_TOLERANCE_M)
+    )
+
+
+def _dimensions_unchanged(original_product, edited_product):
+    original_bbox = _bbox_in_meters(original_product)
+    edited_bbox = _bbox_in_meters(edited_product)
+    return (
+        _within_abs(edited_bbox["x_len"], original_bbox["x_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(edited_bbox["y_len"], original_bbox["y_len"], DIMENSION_TOLERANCE_M)
+        and _within_abs(edited_bbox["z_len"], original_bbox["z_len"], DIMENSION_TOLERANCE_M)
+    )
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Move the door by one meter in direction of x in the wall with id 11kJIqz$n2Jf_DfJV1SDYu."""
+    """Prompt: Move the door by one meter in direction of x in the wall with id
+    11kJIqz$n2Jf_DfJV1SDYu.
+
+    Expected behavior:
+    - The target door moves by exactly 1 meter along the negative X direction.
+    - The door keeps its dimensions.
+    - The filled opening moves with the door.
+
+    Metrics:
+    - right_location: The target door moved by -1.0 m in X and not in Y/Z.
+    - right_dimensions: The door geometry remains unchanged.
+    - integrity_constraint: Only the door and its opening change and the model stays
+      clash-free.
+    """
+    del model_output
+
     metrics = {
-        "right_location": False,  # door is moved correctly
-        "right_dimensions": False,  # door has same l, w, t as before
-        "integrity_constraint": False # opening is also moved
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": False,
     }
 
-    door_metrics = check_move_x_axis("11kJIqz$n2Jf_DfJV1SDY7", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcDoor")
-    integrity_metrics = check_move_x_axis("1U$$kq6emLyOkmIlVkRzzn", ifc_file, edited_ifc_file, {key: False for key in metrics.keys() if key != "integrity_constraint"}, "IfcOpeningElement")
+    try:
+        ifc_original = ifcopenshell.open(ifc_file)
+        ifc_edited = ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return metrics
 
-    metrics.update(door_metrics)
-    if sum(integrity_metrics.values()) == 2: # as there are 2 key in the dict
-        # if every value is true, the opening was moved correctly
-        metrics["integrity_constraint"] = True
+    original_door = _safe_by_guid(ifc_original, DOOR_GUID)
+    edited_door = _safe_by_guid(ifc_edited, DOOR_GUID)
+    opening_guid = filled_opening_guid(ifc_original, DOOR_GUID) or OPENING_GUID_FALLBACK
+    original_opening = _safe_by_guid(ifc_original, opening_guid)
+    edited_opening = _safe_by_guid(ifc_edited, opening_guid)
+
+    if original_door is None or edited_door is None or original_opening is None or edited_opening is None:
+        return metrics
+
+    # Evaluate integrity independently of task scoring once the files and targets are valid.
+    result = check_integrity(
+        ifc_original,
+        ifc_edited,
+        list_of_targets=[DOOR_GUID, opening_guid],
+    )
+    metrics["integrity_constraint"] = bool(result.get("integrity_constraint", False))
+
+    try:
+        metrics["right_location"] = _moved_by_expected_delta(original_door, edited_door)
+        metrics["right_dimensions"] = _dimensions_unchanged(original_door, edited_door)
+    except Exception:
+        return metrics
 
     return metrics
+
+
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "basic_tasks.ifc"
+    edited_ifc_file = data_dir / "solutions" / "test_12.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))

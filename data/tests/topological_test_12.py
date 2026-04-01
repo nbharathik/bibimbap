@@ -1,25 +1,178 @@
+from pathlib import Path
+import sys
+
 import ifcopenshell
+import ifcopenshell.geom
+import ifcopenshell.util.shape
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from data.tests.integrity_utils import check_integrity
+
+
+WALL_GUID = "2c8iwp2JP1ox_Asrwk4CZr"
+
+UNIT_SCALE = 1.0
+EXPECTED_REDUCTION = 1.0
+LENGTH_TOLERANCE = 0.05
+POSITION_TOLERANCE = 0.02
+DIMENSION_TOLERANCE = 0.02
+
+
+def _bbox_in_meters(product, unit_scale):
+    settings = ifcopenshell.geom.settings()
+    shape = ifcopenshell.geom.create_shape(settings, product)
+    geom = shape.geometry
+    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
+    vertices = vertices * unit_scale
+
+    x_min = float(vertices[:, 0].min())
+    x_max = float(vertices[:, 0].max())
+    y_min = float(vertices[:, 1].min())
+    y_max = float(vertices[:, 1].max())
+    z_min = float(vertices[:, 2].min())
+    z_max = float(vertices[:, 2].max())
+
+    return {
+        "x_min": x_min,
+        "x_max": x_max,
+        "y_min": y_min,
+        "y_max": y_max,
+        "z_min": z_min,
+        "z_max": z_max,
+        "x_len": x_max - x_min,
+        "y_len": y_max - y_min,
+        "z_len": z_max - z_min,
+        "x_center": (x_min + x_max) / 2.0,
+        "y_center": (y_min + y_max) / 2.0,
+        "z_center": (z_min + z_max) / 2.0,
+    }
+
+
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
+
+
+def _safe_by_guid(ifc_model, guid):
+    try:
+        return ifc_model.by_guid(guid)
+    except Exception:
+        return None
+
+
+def _load_models(ifc_file, edited_ifc_file):
+    try:
+        return ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return None, None
+
+
+def _point_signature(point):
+    if not point or not getattr(point, "Coordinates", None):
+        return None
+    coords = list(point.Coordinates)
+    while len(coords) < 3:
+        coords.append(0.0)
+    return tuple(float(value) for value in coords[:3])
+
+
+def _direction_signature(direction):
+    if not direction or not getattr(direction, "DirectionRatios", None):
+        return None
+    ratios = list(direction.DirectionRatios)
+    while len(ratios) < 3:
+        ratios.append(0.0)
+    return tuple(float(value) for value in ratios[:3])
+
+
+def _vector_nearly_equal(vector_1, vector_2, tolerance):
+    if vector_1 is None and vector_2 is None:
+        return True
+    if vector_1 is None or vector_2 is None:
+        return False
+    return all(
+        _within_abs(value_1, value_2, tolerance)
+        for value_1, value_2 in zip(vector_1, vector_2)
+    )
+
+
+def _placement_signature(local_placement):
+    if (
+        local_placement is None
+        or not hasattr(local_placement, "is_a")
+        or not local_placement.is_a("IfcLocalPlacement")
+    ):
+        return None
+
+    rel = getattr(local_placement, "RelativePlacement", None)
+    loc = axis = ref = None
+    if rel and rel.is_a("IfcAxis2Placement3D"):
+        loc = _point_signature(getattr(rel, "Location", None))
+        axis = _direction_signature(getattr(rel, "Axis", None))
+        ref = _direction_signature(getattr(rel, "RefDirection", None))
+    elif rel and rel.is_a("IfcAxis2Placement2D"):
+        loc = _point_signature(getattr(rel, "Location", None))
+        ref = _direction_signature(getattr(rel, "RefDirection", None))
+
+    parent = getattr(local_placement, "PlacementRelTo", None)
+    return (loc, axis, ref, _placement_signature(parent))
+
+
+def _placement_signatures_equal(signature_1, signature_2, tolerance):
+    if signature_1 is None and signature_2 is None:
+        return True
+    if signature_1 is None or signature_2 is None:
+        return False
+
+    loc_1, axis_1, ref_1, parent_1 = signature_1
+    loc_2, axis_2, ref_2, parent_2 = signature_2
+    return (
+        _vector_nearly_equal(loc_1, loc_2, tolerance)
+        and _vector_nearly_equal(axis_1, axis_2, tolerance)
+        and _vector_nearly_equal(ref_1, ref_2, tolerance)
+        and _placement_signatures_equal(parent_1, parent_2, tolerance)
+    )
+
+
+def _right_dimensions(original_wall, edited_wall):
+    bbox_original = _bbox_in_meters(original_wall, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(edited_wall, UNIT_SCALE)
+
+    original_length = max(bbox_original["x_len"], bbox_original["y_len"])
+    edited_length = max(bbox_edited["x_len"], bbox_edited["y_len"])
+    return _within_abs(
+        original_length - edited_length,
+        EXPECTED_REDUCTION,
+        LENGTH_TOLERANCE,
+    )
+
+
+def _right_location(original_wall, edited_wall):
+    bbox_original = _bbox_in_meters(original_wall, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(edited_wall, UNIT_SCALE)
+
+    original_minor = min(bbox_original["x_len"], bbox_original["y_len"])
+    edited_minor = min(bbox_edited["x_len"], bbox_edited["y_len"])
+
+    return (
+        _within_abs(bbox_edited["x_center"], bbox_original["x_center"], POSITION_TOLERANCE)
+        and _within_abs(bbox_edited["y_center"], bbox_original["y_center"], POSITION_TOLERANCE)
+        and _within_abs(bbox_edited["z_center"], bbox_original["z_center"], POSITION_TOLERANCE)
+        and _within_abs(bbox_edited["z_len"], bbox_original["z_len"], DIMENSION_TOLERANCE)
+        and _within_abs(edited_minor, original_minor, DIMENSION_TOLERANCE)
+        and _placement_signatures_equal(
+            _placement_signature(getattr(original_wall, "ObjectPlacement", None)),
+            _placement_signature(getattr(edited_wall, "ObjectPlacement", None)),
+            POSITION_TOLERANCE,
+        )
+    )
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """
-    Shorten the length of the wall by 1m that is outside of the walls with ids
-    "3Vyqk8cSj8TOuAk6zHUwBs", "3Vyqk8cSj8TOuAk6zHUw89", "3Vyqk8cSj8TOuAk6zHUwMJ",
-    "3Vyqk8cSj8TOuAk6zHUwNQ", "3Vyqk8cSj8TOuAk6zHUwAt", "3Vyqk8cSj8TOuAk6zHUwAc"
-
-    Checks that wall GlobalId = "2c8iwp2JP1ox_Asrwk4CZr" still exists,
-    that its rectangular profile XDim was reduced by exactly 1000 (mm),
-    and that its placement (location/orientation) has NOT changed between files.
-
-    Metrics (returned):
-      - right_dimensions: True iff edited_xdim == original_xdim - 1000 for all
-        IfcRectangleProfileDef.XDim reachable via representation (direct or via IfcMappedItem).
-      - right_location: True iff wall ObjectPlacement is unchanged between original and edited IFC
-        (compares IfcLocalPlacement chain: location + axis + refdirection, recursively).
-      - integrity_constraint: True iff right_dimensions and right_location are True.
-    """
-    wall_guid = "2c8iwp2JP1ox_Asrwk4CZr"
-    delta = 1000.0
-    TOLERANCE = 0.1
+    del model_output
 
     metrics = {
         "right_dimensions": False,
@@ -27,143 +180,33 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "integrity_constraint": False,
     }
 
-    ifc_original = ifcopenshell.open(ifc_file)
-    ifc_edited = ifcopenshell.open(edited_ifc_file)
-
-    def find_wall(model):
-        for w in (model.by_type("IfcWall") + model.by_type("IfcWallStandardCase")):
-            if getattr(w, "GlobalId", None) == wall_guid:
-                return w
-        return None
-
-    def collect_xdims_from_wall(wall):
-        xdims = []
-        rep = getattr(wall, "Representation", None)
-        if not rep or not getattr(rep, "Representations", None):
-            return xdims
-
-        def walk_item(item):
-            if not item or not hasattr(item, "is_a"):
-                return
-
-            if item.is_a("IfcMappedItem"):
-                mapped_rep = item.MappingSource.MappedRepresentation
-                for mi in (mapped_rep.Items or []):
-                    walk_item(mi)
-                return
-
-            if item.is_a("IfcExtrudedAreaSolid"):
-                swept = getattr(item, "SweptArea", None)
-                if swept and swept.is_a("IfcRectangleProfileDef"):
-                    if swept.XDim is not None:
-                        xdims.append(float(swept.XDim))
-                return
-
-        for rep_sub in (rep.Representations or []):
-            for item in (rep_sub.Items or []):
-                walk_item(item)
-
-        return xdims
-
-    # ---- placement comparison helpers (right_location) ----
-    def vec3_from_cartesian_point(p):
-        if not p or not getattr(p, "Coordinates", None):
-            return None
-        coords = list(p.Coordinates)
-        while len(coords) < 3:
-            coords.append(0.0)
-        return (float(coords[0]), float(coords[1]), float(coords[2]))
-
-    def vec3_from_direction(d):
-        if not d or not getattr(d, "DirectionRatios", None):
-            return None
-        ratios = list(d.DirectionRatios)
-        while len(ratios) < 3:
-            ratios.append(0.0)
-        return (float(ratios[0]), float(ratios[1]), float(ratios[2]))
-
-    def nearly_equal(a, b, tol=TOLERANCE):
-        return abs(float(a) - float(b)) <= tol
-
-    def vec_nearly_equal(v1, v2, tol=TOLERANCE):
-        if v1 is None and v2 is None:
-            return True
-        if v1 is None or v2 is None:
-            return False
-        return all(nearly_equal(x, y, tol) for x, y in zip(v1, v2))
-
-    def placement_signature(local_placement):
-        """
-        Comparable signature of an IfcLocalPlacement chain:
-        (Location(x,y,z), Axis(dx,dy,dz), RefDirection(rx,ry,rz), parent_signature)
-        """
-        if local_placement is None or not hasattr(local_placement, "is_a") or not local_placement.is_a("IfcLocalPlacement"):
-            return None
-
-        rel = getattr(local_placement, "RelativePlacement", None)
-        loc = axis = ref = None
-
-        if rel and rel.is_a("IfcAxis2Placement3D"):
-            loc = vec3_from_cartesian_point(getattr(rel, "Location", None))
-            axis = vec3_from_direction(getattr(rel, "Axis", None))
-            ref = vec3_from_direction(getattr(rel, "RefDirection", None))
-        elif rel and rel.is_a("IfcAxis2Placement2D"):
-            loc2 = vec3_from_cartesian_point(getattr(rel, "Location", None))
-            if loc2 is not None:
-                loc = (loc2[0], loc2[1], 0.0)
-            ref2 = vec3_from_direction(getattr(rel, "RefDirection", None))
-            if ref2 is not None:
-                ref = (ref2[0], ref2[1], 0.0)
-
-        parent = getattr(local_placement, "PlacementRelTo", None)
-        return (loc, axis, ref, placement_signature(parent))
-
-    def signatures_equal(sig1, sig2, tol=TOLERANCE):
-        if sig1 is None and sig2 is None:
-            return True
-        if sig1 is None or sig2 is None:
-            return False
-
-        loc1, axis1, ref1, parent1 = sig1
-        loc2, axis2, ref2, parent2 = sig2
-
-        if not vec_nearly_equal(loc1, loc2, tol):
-            return False
-        if not vec_nearly_equal(axis1, axis2, tol):
-            return False
-        if not vec_nearly_equal(ref1, ref2, tol):
-            return False
-        return signatures_equal(parent1, parent2, tol)
-
-    orig_wall = find_wall(ifc_original)
-    edit_wall = find_wall(ifc_edited)
-
-    # Require wall to exist in both files (implicit object_exists gate)
-    if orig_wall is None or edit_wall is None:
+    ifc_original, ifc_edited = _load_models(ifc_file, edited_ifc_file)
+    if ifc_original is None or ifc_edited is None:
         return metrics
 
-    # ---- right_location ----
-    sig_orig = placement_signature(getattr(orig_wall, "ObjectPlacement", None))
-    sig_edit = placement_signature(getattr(edit_wall, "ObjectPlacement", None))
-    if not signatures_equal(sig_orig, sig_edit, TOLERANCE):
-        return metrics
-    metrics["right_location"] = True
-
-    # ---- right_dimensions ----
-    orig_xdims = collect_xdims_from_wall(orig_wall)
-    edit_xdims = collect_xdims_from_wall(edit_wall)
-
-    if not orig_xdims or not edit_xdims:
-        return metrics
-    if len(orig_xdims) != len(edit_xdims):
+    original_wall = _safe_by_guid(ifc_original, WALL_GUID)
+    edited_wall = _safe_by_guid(ifc_edited, WALL_GUID)
+    if original_wall is None or edited_wall is None:
         return metrics
 
-    for ox, ex in zip(orig_xdims, edit_xdims):
-        if abs(ex - (ox - delta)) > TOLERANCE:
-            return metrics
+    result = check_integrity(
+        ifc_original,
+        ifc_edited,
+        list_of_targets=[WALL_GUID],
+    )
+    metrics["integrity_constraint"] = bool(result.get("integrity_constraint", False))
 
-    metrics["right_dimensions"] = True
-    metrics["integrity_constraint"] = metrics["right_dimensions"] and metrics["right_location"]
+    try:
+        metrics["right_dimensions"] = _right_dimensions(original_wall, edited_wall)
+        metrics["right_location"] = _right_location(original_wall, edited_wall)
+    except Exception:
+        return metrics
+
     return metrics
 
 
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "01" / "02" / "01_02_012.ifc"
+    edited_ifc_file = data_dir / "solutions" / "topological_12.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))
