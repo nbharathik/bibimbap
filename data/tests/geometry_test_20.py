@@ -1,14 +1,12 @@
 import ifcopenshell
 
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 COLUMN_GUID = "0lwZAgQMb7yAIJTmmcGlwc"
 
 # Expected correct answer
 CORRECT_WALL_GUID = "0lwZAgQMb7yAIJTmmcGloi"
-
-# Partial credit alternative (as specified)
-PARTIAL_WALL_GUID = "0lwZAgQMb7yAIJTmmcGlnB" # This is also very close, but not the closest
-
 
 def _safe_by_guid(ifc, guid: str):
     try:
@@ -18,19 +16,16 @@ def _safe_by_guid(ifc, guid: str):
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: delete the wall closest to the given column (by midpoint-to-wall-edge distance).
-
-    Scoring:
-    - score = 1.0 if CORRECT_WALL_GUID is deleted
-    - score = 0.2 if CORRECT_WALL_GUID is not deleted but almost nearest wall is deleted
-    - score = 0.0 otherwise
-
-    Metrics are numeric-friendly (not only booleans).
-    """
+    """Prompt: delete the wall closest to the given column (by midpoint-to-wall-edge distance)."""
 
     metrics = {
-        "object_not_exists": 0.0,
+        "object_not_exists": False,
+        "integrity_constraint": False,
     }
+
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
 
     try:
         ifc_edited = ifcopenshell.open(edited_ifc_file)
@@ -43,13 +38,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         return metrics
 
     wall_deleted = _safe_by_guid(ifc_edited, CORRECT_WALL_GUID) is None
-    partial_wall_deleted = _safe_by_guid(ifc_edited, PARTIAL_WALL_GUID) is None
 
     if wall_deleted:
-        metrics["object_not_exists"] = 1.0
-    elif partial_wall_deleted:
-        metrics["object_not_exists"] = 0.2
+        metrics["object_not_exists"] = True
     
-    metrics["integrity_constraint"] = metrics["object_not_exists"]
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, [CORRECT_WALL_GUID])
 
     return metrics

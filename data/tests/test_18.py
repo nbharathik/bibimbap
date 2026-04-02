@@ -1,5 +1,7 @@
 import ifcopenshell
 
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Delete the opening with id 0APGbZXNKfgPNB$VQQZ0pi."""
@@ -7,6 +9,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "object_not_exists": False,
         "integrity_constraint": False # the opening contains a window. that should also be removed
     }
+
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
 
     edited_ifc = ifcopenshell.open(edited_ifc_file)
 
@@ -18,10 +24,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         # object does not exist
         metrics["object_not_exists"] = True
 
-    try:
-        edited_ifc.by_guid("11kJIqz$n2Jf_DfJV1SDbS")
-    except RuntimeError:
-        # window also deleted
-        metrics["integrity_constraint"] = True
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, ["0APGbZXNKfgPNB$VQQZ0pi"])
 
     return metrics

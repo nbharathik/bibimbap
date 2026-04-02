@@ -1,4 +1,6 @@
 import ifcopenshell
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Remove column that is inside of the walls with the ids 3Vyqk8cSj8TOuAk6zHUwIV, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ"""
@@ -20,45 +22,16 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             if getattr(obj, "GlobalId", None)
         }
 
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
+
     # ---- object_not_exists ----
     orig_columns = ids_of_type(ifc_original, "IfcColumn")
     edited_columns = ids_of_type(ifc_edited, "IfcColumn")
     metrics["object_not_exists"] = (target_guid in orig_columns) and (target_guid not in edited_columns)
 
-    # ---- integrity_constraint for column deletion ----
-    # Integrity rule: no relationship in the edited IFC should still reference the deleted column.
-    def contains_guid(value, guid):
-        if value is None:
-            return False
-        # entity instance
-        if hasattr(value, "is_a"):
-            return getattr(value, "GlobalId", None) == guid
-        # aggregate
-        if isinstance(value, (list, tuple)):
-            return any(contains_guid(v, guid) for v in value)
-        return False
-
-    dangling_refs = []
-
-    # Check all relationships (IfcRelationship is a good umbrella; fallback to IfcRel* if needed)
-    rels = []
-    try:
-        rels = ifc_edited.by_type("IfcRelationship")
-    except Exception:
-        # very old schemas / edge cases
-        rels = [r for r in ifc_edited.by_type("IfcRoot") if r.is_a().startswith("IfcRel")]
-
-    for rel in rels:
-        info = rel.get_info()
-        # scan all attributes for references to target_guid
-        for k, v in info.items():
-            if k in ("id", "type"):
-                continue
-            if contains_guid(v, target_guid):
-                dangling_refs.append((rel.is_a(), getattr(rel, "GlobalId", None), k))
-                break
-
-    metrics["integrity_constraint"] = (len(dangling_refs) == 0)
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, [target_guid])
 
     return metrics
 
