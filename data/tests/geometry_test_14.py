@@ -1,10 +1,26 @@
-import math
+from pathlib import Path
+import sys
+
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.shape
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from data.tests.integrity_utils import check_integrity
+
+
 SLAB_GUID = "11kJIqz$n2Jf_DfJV1SCVP"
+
+UNIT_SCALE = 1.0
+SQUARE_TOLERANCE = 0.2
+Y_INCREASE_EXPECTED = 1.5
+Y_INCREASE_TOLERANCE = 0.2
+THICKNESS_TOLERANCE = 0.05
+CENTER_TOLERANCE = 0.05
 
 
 def _bbox_in_meters(product, unit_scale):
@@ -31,35 +47,78 @@ def _bbox_in_meters(product, unit_scale):
         "x_len": x_max - x_min,
         "y_len": y_max - y_min,
         "z_len": z_max - z_min,
-        "x_c": (x_min + x_max) / 2.0,
-        "y_c": (y_min + y_max) / 2.0,
-        "z_c": (z_min + z_max) / 2.0,
+        "x_center": (x_min + x_max) / 2.0,
+        "y_center": (y_min + y_max) / 2.0,
+        "z_center": (z_min + z_max) / 2.0,
     }
 
 
-def _within_abs(value, expected, tol):
-    return abs(value - expected) <= tol
+def _within_abs(value, expected, tolerance):
+    return abs(value - expected) <= tolerance
 
 
-def _safe_by_guid(ifc, guid: str):
+def _safe_by_guid(ifc_model, guid):
     try:
-        return ifc.by_guid(guid)
+        return ifc_model.by_guid(guid)
     except Exception:
         return None
 
 
+def _load_models(ifc_file, edited_ifc_file):
+    try:
+        return ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)
+    except Exception:
+        return None, None
+
+
+def _dimensions_ok(slab_original, slab_edited):
+    bbox_original = _bbox_in_meters(slab_original, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(slab_edited, UNIT_SCALE)
+
+    y_increase = bbox_edited["y_len"] - bbox_original["y_len"]
+    y_increased_correctly = _within_abs(
+        y_increase,
+        Y_INCREASE_EXPECTED,
+        Y_INCREASE_TOLERANCE,
+    )
+    is_square = _within_abs(
+        bbox_edited["x_len"],
+        bbox_edited["y_len"],
+        SQUARE_TOLERANCE,
+    )
+    thickness_unchanged = _within_abs(
+        bbox_edited["z_len"],
+        bbox_original["z_len"],
+        THICKNESS_TOLERANCE,
+    )
+    return y_increased_correctly and is_square and thickness_unchanged
+
+
+def _location_ok(slab_original, slab_edited):
+    bbox_original = _bbox_in_meters(slab_original, UNIT_SCALE)
+    bbox_edited = _bbox_in_meters(slab_edited, UNIT_SCALE)
+
+    return (
+        _within_abs(
+            bbox_edited["x_center"],
+            bbox_original["x_center"],
+            CENTER_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["y_center"],
+            bbox_original["y_center"],
+            CENTER_TOLERANCE,
+        )
+        and _within_abs(
+            bbox_edited["z_center"],
+            bbox_original["z_center"],
+            CENTER_TOLERANCE,
+        )
+    )
+
+
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: increase the length of one side of the slab so that it forms a square
-
-    Expected behavior:
-    - The slab with GUID "11kJIqz$n2Jf_DfJV1SCVP" should have one side increased.
-    - Originally: one side is 8.5m, the other is 10m.
-    - After edit: Y direction should increase by ~1.5m (from 8.5m to 10m).
-    - Result: slab should be approximately square (both sides ~10m).
-
-    Metrics:
-    - right_dimensions: The slab forms a square shape (x_len ≈ y_len within 0.2m tolerance)
-    """
+    del model_output
 
     metrics = {
         "integrity_constraint": False,
@@ -67,39 +126,33 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "right_location": False,
     }
 
-    try:
-        ifc_original = ifcopenshell.open(ifc_file)
-        ifc_edited = ifcopenshell.open(edited_ifc_file)
-    except Exception:
+    ifc_original, ifc_edited = _load_models(ifc_file, edited_ifc_file)
+    if ifc_original is None or ifc_edited is None:
         return metrics
-
-    unit_scale = 1.0
-    square_tolerance = 0.2
-    y_increase_expected = 1.5
-    y_increase_tolerance = 0.2
 
     slab_original = _safe_by_guid(ifc_original, SLAB_GUID)
     slab_edited = _safe_by_guid(ifc_edited, SLAB_GUID)
-
     if slab_original is None or slab_edited is None:
         return metrics
 
+    result = check_integrity(
+        ifc_original,
+        ifc_edited,
+        list_of_targets=[SLAB_GUID],
+    )
+    metrics["integrity_constraint"] = bool(result.get("integrity_constraint", False))
+
     try:
-        bbox_original = _bbox_in_meters(slab_original, unit_scale)
-        bbox_edited = _bbox_in_meters(slab_edited, unit_scale)
-        
-        y_increase = bbox_edited["y_len"] - bbox_original["y_len"]
-        y_increased_correctly = _within_abs(y_increase, y_increase_expected, y_increase_tolerance)
-        
-        x_len = bbox_edited["x_len"]
-        y_len = bbox_edited["y_len"]
-        is_square = abs(x_len - y_len) <= square_tolerance
-        
-        metrics["right_dimensions"] = y_increased_correctly and is_square
-        metrics["integrity_constraint"] = bool(slab_edited.is_a("IfcSlab"))
-        metrics["right_location"] = metrics["integrity_constraint"]
-        
+        metrics["right_dimensions"] = _dimensions_ok(slab_original, slab_edited)
+        metrics["right_location"] = _location_ok(slab_original, slab_edited)
     except Exception:
         return metrics
 
     return metrics
+
+
+if __name__ == "__main__":
+    data_dir = Path(__file__).resolve().parents[1]
+    ifc_file = data_dir / "ifc" / "01" / "01" / "01_01_014.ifc"
+    edited_ifc_file = data_dir / "solutions" / "geometry_14.ifc"
+    print(execute_test(str(ifc_file), str(edited_ifc_file), None))
