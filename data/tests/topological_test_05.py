@@ -35,9 +35,9 @@ Metrics:
 import ifcopenshell
 from .utils.create_utils import (
     find_new_elements, get_bbox, bbox_contains_bbox,
-    compute_integrity, check_is_correct_type,
-    check_elements_preserved,
+    compute_integrity,    check_elements_preserved,
 )
+from .utils.clash_utils import check_clash_integrity
 
 
 def _find_door_wall_via_chain(model, door):
@@ -122,8 +122,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     # integrity
     sub_checks = [
-        check_is_correct_type(door, "IfcDoor"),
         _check_fills_voids_any_wall(ifc_edited, door),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[door.GlobalId], clash_mode="collision"),
         check_elements_preserved(ifc_original, ifc_edited),
     ]
     metrics["integrity_constraint"] = compute_integrity(sub_checks)

@@ -34,9 +34,9 @@ Metrics:
 import ifcopenshell
 from .utils.create_utils import (
     find_new_elements, get_bbox, within_abs, bbox_contains_bbox,
-    compute_integrity, check_is_correct_type,
-    check_fills_voids_chain, check_elements_preserved,
+    compute_integrity,    check_fills_voids_chain, check_elements_preserved,
 )
+from .utils.clash_utils import check_clash_integrity
 
 
 def _find_north_wall(walls, target_guid):
@@ -126,7 +126,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     north_wall, north_bbox, target_bbox = _find_north_wall(walls, TARGET_GUID)
     if north_wall is None or north_bbox is None or target_bbox is None:
         sub_checks = [
-            check_is_correct_type(door, "IfcDoor"),
+            check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[door.GlobalId], clash_mode="collision"),
             check_elements_preserved(ifc_original, ifc_edited),
         ]
         metrics["integrity_constraint"] = compute_integrity(sub_checks)
@@ -156,8 +156,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     # integrity: fills/voids chain to north wall
     sub_checks = [
-        check_is_correct_type(door, "IfcDoor"),
         check_fills_voids_chain(ifc_edited, door, north_wall),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[door.GlobalId], clash_mode="collision"),
         check_elements_preserved(ifc_original, ifc_edited),
     ]
     metrics["integrity_constraint"] = compute_integrity(sub_checks)

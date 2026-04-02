@@ -39,9 +39,9 @@ Metrics:
 import ifcopenshell
 from .utils.create_utils import (
     find_new_elements, get_bbox, get_shape_dims, within_abs, dims_match,
-    compute_integrity, check_is_correct_type,
-    check_elements_preserved, check_voids_relationship,
+    compute_integrity,    check_elements_preserved, check_voids_relationship,
 )
+from .utils.clash_utils import check_clash_integrity
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
@@ -112,8 +112,8 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     # integrity: voids relationship + valid representation + elements preserved
     sub_checks = [
-        check_is_correct_type(opening, "IfcOpeningElement"),
         check_voids_relationship(ifc_edited, opening, slab),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[opening.GlobalId], clash_mode="collision"),
         check_elements_preserved(ifc_original, ifc_edited),
     ]
     metrics["integrity_constraint"] = compute_integrity(sub_checks)
