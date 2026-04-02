@@ -1,5 +1,6 @@
 import ifcopenshell
-
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def _is_deleted(guid, edited_ifc):
     try:
@@ -22,6 +23,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "integrity_constraint": False
     }
 
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
+
+
     original_ifc = ifcopenshell.open(ifc_file)
     relationship_ids = {}
 
@@ -34,24 +40,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
                 # these relationships need to be deleted when one of the spaces is deleted
                 relationship_ids[column_guid].append(rel.GlobalId)
 
-    # now we have the relationships of the space that will be deleted
-
-    edited_ifc = ifcopenshell.open(edited_ifc_file)
-    for column_guid in column_guids:
-        if not _is_deleted(column_guid, edited_ifc):
-            # one of the columns is not deleted -> deleting failed
-            return metrics
-
-    # no return in above loop -> every column deleted
-    metrics["object_not_exists"] = True
-
-    for column_guid in column_guids:
-        for rel_id in relationship_ids[column_guid]:
-            if not _is_deleted(rel_id, edited_ifc):
-                # one of the relationships still exists -> integrity failed
-                return metrics
-
-    # no return in above loop -> every relationship was also deleted
-    metrics["integrity_constraint"] = True
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, column_guids)
 
     return metrics

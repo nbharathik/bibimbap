@@ -13,6 +13,8 @@ WALL_GUIDS = [
     "1u4oG4Ltr15fMWjwJ4pNV8",
 ]
 
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def _exists(ifc, guid: str) -> bool:
     try:
@@ -33,6 +35,11 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "integrity_constraint": False,
     }
 
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
+
+
     try:
         ifc_edited = ifcopenshell.open(edited_ifc_file)
     except Exception:
@@ -43,6 +50,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     )
         
     metrics["object_not_exists"] = all_deleted
-    metrics["integrity_constraint"] = all_deleted
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, WALL_GUIDS)
 
     return metrics

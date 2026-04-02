@@ -1,4 +1,6 @@
 import ifcopenshell
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """
@@ -21,6 +23,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "integrity_constraint": False,
     }
 
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
+
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
@@ -40,33 +46,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
 
     metrics["object_not_exists"] = (target_wall_guid in orig_wall_ids) and (target_wall_guid not in edited_wall_ids)
 
-    # ---- integrity_constraint ----
-    def contains_guid(value, guid):
-        if value is None:
-            return False
-        if hasattr(value, "is_a"):  # entity instance
-            return getattr(value, "GlobalId", None) == guid
-        if isinstance(value, (list, tuple)):  # aggregate
-            return any(contains_guid(v, guid) for v in value)
-        return False
-
-    dangling = False
-    try:
-        relationships = ifc_edited.by_type("IfcRelationship")
-    except Exception:
-        relationships = [r for r in ifc_edited.by_type("IfcRoot") if r.is_a().startswith("IfcRel")]
-
-    for rel in relationships:
-        info = rel.get_info()
-        for k, v in info.items():
-            if k in ("id", "type"):
-                continue
-            if contains_guid(v, target_wall_guid):
-                dangling = True
-                break
-        if dangling:
-            break
-
-    metrics["integrity_constraint"] = (not dangling)
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, [target_wall_guid])
 
     return metrics

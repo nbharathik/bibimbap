@@ -1,5 +1,7 @@
 import ifcopenshell
 
+from integrity_utils import non_target_elements_unchanged
+from delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Delete the room that is enclosed by the walls with ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV."""
@@ -7,6 +9,10 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "object_not_exists": False,
         "integrity_constraint": False
     }
+
+    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+        # all elements remained the same -> model did changed nothing -> zero score
+        return metrics
 
     original_ifc = ifcopenshell.open(ifc_file)
     original_space = original_ifc.by_guid("3Vyqk8cSj8TOuAk6zHUwK5")
@@ -27,15 +33,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         # object does not exist
         metrics["object_not_exists"] = True
 
-    for guid in relationship_ids:
-        try:
-            edited_ifc.by_guid(guid)
-            # relationship still there -> integrity violated
-            return metrics
-        except RuntimeError:
-            pass
-
-    # no return in above loop -> every relationship was also deleted
-    metrics["integrity_constraint"] = True
+    metrics["integrity_constraint"] = run_delete_integrity_check(ifc_file, edited_ifc_file, ["3Vyqk8cSj8TOuAk6zHUwK5"])
 
     return metrics
