@@ -1,95 +1,121 @@
+"""
+Test 03 - Basic CREATE: Opening in Slab
+=========================================
+
+Prompt:
+    "Add an opening of size 5 by 5 meters to the center of the slab
+    with id 11kJIqz$n2Jf_DfJV1SCVP."
+
+IFC file: basic_tasks.ifc
+Category: Basic / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcOpeningElement, size it to 5m × 5m,
+    center it on the target slab, and link it via IfcRelVoidsElement so that the
+    opening correctly voids the slab.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcOpeningElement was created. If zero or more
+        than one is found, the test returns early with only this metric set.
+
+    right_dimensions (bool):
+        True if the opening plan dimensions are 5m × 5m (either orientation
+        accepted). Tolerance: ±0.05m.
+
+    right_location (bool):
+        True if the opening is centered on the slab. Centering is checked by
+        verifying that the gap between the slab edge and opening edge is equal
+        on both sides in X and Y (within ±0.5m). Additionally, the opening
+        must intersect the slab in the Z-axis (go through it).
+
+    integrity_constraint (float, 0.0–1.0):
+        Average of the following sub-checks (each 0.0 or 1.0):
+        1. Correct IFC type - element is IfcOpeningElement
+        2. Voids relationship - IfcRelVoidsElement links the opening to the slab
+        3. Elements preserved - all original GUIDs still exist
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.placement
-import ifcopenshell.util.shape
-import math
+from .utils.create_utils import (
+    find_new_elements, get_bbox, get_shape_dims, within_abs, dims_match,
+    compute_integrity,    check_elements_preserved, check_voids_relationship,
+)
+from .utils.clash_utils import check_clash_integrity
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Add an opening of size 5 by 5 meters to the center of the slab with id 11kJIqz$n2Jf_DfJV1SCVP."""
     metrics = {
-        "object_exists": False, # opening was created
-        "right_location": False, # opening is in center of slab
-        "right_dimensions": False, # opening has size 5x5
-        "integrity_constraint": False # opening has has voids relationship
+        "object_exists": False,
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": 0.0,
     }
+
+    SLAB_GUID = "11kJIqz$n2Jf_DfJV1SCVP"
+    EXPECTED_DIMS = (5.0, 5.0)
+    DIM_TOL = 0.05
+    CENTER_TOL = 0.5
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # get slab and geometry information
-    slab = ifc_edited.by_guid("11kJIqz$n2Jf_DfJV1SCVP")
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, slab)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_slab = min(vertices[:, 0])
-    x_max_slab = max(vertices[:, 0])
-    y_min_slab = min(vertices[:, 1])
-    y_max_slab = max(vertices[:, 1])
-    z_min_slab = min(vertices[:, 2])
-    z_max_slab = max(vertices[:, 2])
+    # get slab bounding box
+    slab = ifc_edited.by_guid(SLAB_GUID)
+    try:
+        slab_bbox = get_bbox(slab)
+    except RuntimeError:
+        return metrics
 
-    # check if there is a new opening
-    original_opening_guids = set(opening.GlobalId for opening in ifc_original.by_type("IfcOpeningElement"))
-    edited_opening_guids = set(opening.GlobalId for opening in ifc_edited.by_type("IfcOpeningElement"))
-
-    new_opening_ids = list(edited_opening_guids - original_opening_guids)
-
-    if len(new_opening_ids) == 0:
+    # find new openings - must be exactly one
+    new_openings = find_new_elements(ifc_original, ifc_edited, "IfcOpeningElement")
+    if not new_openings:
         return metrics
 
     metrics["object_exists"] = True
-    opening = ifc_edited.by_guid(new_opening_ids[0])
 
+    if len(new_openings) != 1:
+        return metrics
 
-    # get geometry information of the new door
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, opening)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_opening = min(vertices[:, 0])
-    x_max_opening = max(vertices[:, 0])
-    y_min_opening = min(vertices[:, 1])
-    y_max_opening = max(vertices[:, 1])
-    z_min_opening = min(vertices[:, 2])
-    z_max_opening = max(vertices[:, 2])
+    opening = new_openings[0]
 
-    width_opening = ifcopenshell.util.shape.get_x(geom)
-    thickness_opening = ifcopenshell.util.shape.get_y(geom)
+    try:
+        opening_bbox = get_bbox(opening)
+    except RuntimeError:
+        return metrics
 
-    # check for right size dimensions
-    if width_opening == 5.0 and thickness_opening == 5.0:
+    shape_dims = get_shape_dims(opening)
+    if shape_dims is None:
+        return metrics
+    width, depth, height = shape_dims
+
+    # right_dimensions: 5x5 in plan (accept both orientations)
+    if dims_match((width, depth), EXPECTED_DIMS, DIM_TOL):
         metrics["right_dimensions"] = True
 
-    # check for right location (opening in center of slab)
-    if metrics["right_dimensions"]:
-        # same distance from outside of opening to outside of slab at all edges, ie opening is centered
-        if (math.fabs(x_min_slab - x_min_opening) == math.fabs(x_max_slab - x_max_opening)) and (math.fabs(y_min_slab - y_min_opening) == math.fabs(y_max_slab - y_max_opening)):
-            # opening is on slab
-            if x_min_slab > x_min_opening and x_max_slab < x_max_opening and y_min_slab > y_min_opening and y_max_slab < y_max_opening:
-                # opening goes through slab
-                if z_min_slab <= z_min_opening and z_max_slab >= z_max_opening:
-                    metrics["right_location"] = True
+    # right_location: opening centered on slab (equal distance from each edge)
+    dx_min = abs(slab_bbox["x_min"] - opening_bbox["x_min"])
+    dx_max = abs(slab_bbox["x_max"] - opening_bbox["x_max"])
+    dy_min = abs(slab_bbox["y_min"] - opening_bbox["y_min"])
+    dy_max = abs(slab_bbox["y_max"] - opening_bbox["y_max"])
 
+    centered_x = within_abs(dx_min, dx_max, CENTER_TOL)
+    centered_y = within_abs(dy_min, dy_max, CENTER_TOL)
 
-    # get voids relationship of opening and slab and check if they exist and correspond
+    # opening should go through the slab in z
+    through_z = (opening_bbox["z_min"] <= slab_bbox["z_max"] and
+                 opening_bbox["z_max"] >= slab_bbox["z_min"])
 
-    opening_voids_relationship = list(filter(lambda x: x.is_a("IfcRelVoidsElement"), ifc_edited.get_inverse(opening)))
-    if len(opening_voids_relationship) == 0:
-        return metrics
-    opening_voids_relationship = opening_voids_relationship[0].GlobalId
+    if centered_x and centered_y and through_z:
+        metrics["right_location"] = True
 
-
-    slab_voids_relationship = list(filter(lambda x: x.is_a("IfcRelVoidsElement"), ifc_edited.get_inverse(slab)))
-    if len(slab_voids_relationship) == 0:
-        return metrics
-    slab_voids_relationship = slab_voids_relationship[0].GlobalId
-
-
-    if opening_voids_relationship != slab_voids_relationship:
-        return metrics
-
-    # every integrity constraint true
-    metrics["integrity_constraint"] = True
+    # integrity: voids relationship + valid representation + elements preserved
+    sub_checks = [
+        check_voids_relationship(ifc_edited, opening, slab),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[opening.GlobalId], clash_mode="collision"),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
 
     return metrics

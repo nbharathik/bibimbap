@@ -1,113 +1,113 @@
+"""
+Topological Test 03 - CREATE: Wall Separating Two Rooms
+========================================================
+
+Prompt:
+    "Insert a wall that separates the rooms with the ids
+    0rMMWWDi1E0Qbe7dlPjRaK, 0rMMWWDi1E0Qbe7dlPjRcx."
+
+IFC file: 01/02/01_02_003.ifc
+Category: Topological / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcWall positioned between the two
+    referenced rooms. The wall center should lie on the line between the
+    room centers (triangle inequality check).
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcWall was created.
+
+    right_dimensions (bool):
+        True if the wall has reasonable height (>1.5m) and length (>0.5m).
+
+    right_location (bool):
+        True if the wall is positioned between the two rooms (sum of distances
+        from wall to each room center equals distance between room centers, ±1m).
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
+from .utils.create_utils import (
+    find_new_elements, get_bbox, get_shape_dims, within_abs,
+    compute_integrity,    check_spatial_containment, check_elements_preserved,
+)
+from .utils.clash_utils import check_clash_integrity
+
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-    """Prompt: Insert a wall that separates the rooms with the ids[ GlobalId = "0rMMWWDi1E0Qbe7dlPjRaK", 
-    GlobalId = "0rMMWWDi1E0Qbe7dlPjRcx"]]")."""
+    """Prompt: Insert a wall that separates the rooms with the ids 0rMMWWDi1E0Qbe7dlPjRaK, 0rMMWWDi1E0Qbe7dlPjRcx."""
     metrics = {
         "object_exists": False,
         "right_location": False,
         "right_dimensions": False,
-        "integrity_constraint": False,  # NEW
+        "integrity_constraint": 0.0,
     }
+
+    ROOM_IDS = ["0rMMWWDi1E0Qbe7dlPjRaK", "0rMMWWDi1E0Qbe7dlPjRcx"]
+    LOC_TOL = 1.0
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # check if there is a new wall
-    original_wall_guids = set(wall.GlobalId for wall in ifc_original.by_type("IfcWall"))
-    edited_wall_guids = set(wall.GlobalId for wall in ifc_edited.by_type("IfcWall"))
-
-    new_wall_ids = list(edited_wall_guids - original_wall_guids)
-    if len(new_wall_ids) == 0:
-        metrics["integrity_constraint"] = all(
-            metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-        )
+    new_walls = find_new_elements(ifc_original, ifc_edited, "IfcWall")
+    if not new_walls:
         return metrics
 
     metrics["object_exists"] = True
-    wall = ifc_edited.by_guid(new_wall_ids[0])
 
-    # get wall geometry information
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, wall)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_wall = min(vertices[:, 0])
-    x_max_wall = max(vertices[:, 0])
-    y_min_wall = min(vertices[:, 1])
-    y_max_wall = max(vertices[:, 1])
-    z_min_wall = min(vertices[:, 2])
-    z_max_wall = max(vertices[:, 2])
+    if len(new_walls) != 1:
+        return metrics
 
-    width_wall = ifcopenshell.util.shape.get_x(geom)
-    height_wall = ifcopenshell.util.shape.get_z(geom)
-    thickness_wall = ifcopenshell.util.shape.get_y(geom)
-
-    # wall center point
-    wall_center_x = (x_min_wall + x_max_wall) / 2
-    wall_center_y = (y_min_wall + y_max_wall) / 2
-
-    # get both room geometry information
-    room_ids = ["0rMMWWDi1E0Qbe7dlPjRaK", "0rMMWWDi1E0Qbe7dlPjRcx"]
-
+    wall = new_walls[0]
     try:
-        room_bounds = []
-        room_centers = []
-        for room_id in room_ids:
-            try:
-                room = ifc_edited.by_guid(room_id)
-                room_shape = ifcopenshell.geom.create_shape(settings, room)
-                room_geom = room_shape.geometry
-                room_vertices = ifcopenshell.util.shape.get_shape_vertices(room_shape, room_geom)
-                x_min = min(room_vertices[:, 0])
-                x_max = max(room_vertices[:, 0])
-                y_min = min(room_vertices[:, 1])
-                y_max = max(room_vertices[:, 1])
+        wall_bbox = get_bbox(wall)
+    except RuntimeError:
+        return metrics
 
-                room_bounds.append({
-                    'x_min': x_min,
-                    'x_max': x_max,
-                    'y_min': y_min,
-                    'y_max': y_max
-                })
-                room_centers.append({
-                    'x': (x_min + x_max) / 2,
-                    'y': (y_min + y_max) / 2
-                })
-            except:
-                continue
+    wall_dims = get_shape_dims(wall)
+    if wall_dims is None:
+        return metrics
+    width_wall, thickness_wall, height_wall = wall_dims
 
-        if len(room_bounds) >= 2:
-            # check if wall is positioned between the two rooms (right_location)
-            room1_center = room_centers[0]
-            room2_center = room_centers[1]
+    wall_center_x = wall_bbox["x_c"]
+    wall_center_y = wall_bbox["y_c"]
 
-            # calculate if wall is positioned between room centers
-            tolerance = 2.0
+    # get room geometry
+    room_centers = []
+    for room_id in ROOM_IDS:
+        try:
+            room = ifc_edited.by_guid(room_id)
+            room_bbox = get_bbox(room)
+            room_centers.append((room_bbox["x_c"], room_bbox["y_c"]))
+        except RuntimeError:
+            continue
 
-            dist_room1_to_wall = ((wall_center_x - room1_center['x'])**2 + (wall_center_y - room1_center['y'])**2)**0.5
-            dist_room2_to_wall = ((wall_center_x - room2_center['x'])**2 + (wall_center_y - room2_center['y'])**2)**0.5
-            dist_room1_to_room2 = ((room1_center['x'] - room2_center['x'])**2 + (room1_center['y'] - room2_center['y'])**2)**0.5
+    if len(room_centers) >= 2:
+        r1x, r1y = room_centers[0]
+        r2x, r2y = room_centers[1]
 
-            # wall should be somewhere between the rooms (not beyond either room)
-            if abs((dist_room1_to_wall + dist_room2_to_wall) - dist_room1_to_room2) < tolerance:
-                metrics["right_location"] = True
+        dist_r1_wall = ((wall_center_x - r1x)**2 + (wall_center_y - r1y)**2)**0.5
+        dist_r2_wall = ((wall_center_x - r2x)**2 + (wall_center_y - r2y)**2)**0.5
+        dist_r1_r2 = ((r1x - r2x)**2 + (r1y - r2y)**2)**0.5
 
-            # check if wall has reasonable dimensions for separating rooms (right_dimensions)
-            wall_length = max(width_wall, thickness_wall)
+        # wall between rooms: d(r1,wall) + d(r2,wall) ≈ d(r1,r2)
+        if abs((dist_r1_wall + dist_r2_wall) - dist_r1_r2) < LOC_TOL:
+            metrics["right_location"] = True
 
-            # wall should have reasonable height (> 1.5m typically) and length
-            if height_wall > 1.5 and wall_length > 0.5:
-                metrics["right_dimensions"] = True
+    # right_dimensions: reasonable wall
+    wall_length = max(width_wall, thickness_wall)
+    if height_wall > 1.5 and wall_length > 0.5:
+        metrics["right_dimensions"] = True
 
-    except Exception:
-        pass
+    # integrity
+    sub_checks = [
+        check_spatial_containment(ifc_edited, wall),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[wall.GlobalId], clash_mode="collision"),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
 
-    # NEW: integrity constraint = all other metrics are true
-    metrics["integrity_constraint"] = all(
-        metrics[k] for k in ("object_exists", "right_location", "right_dimensions")
-    )
     return metrics
-

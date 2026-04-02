@@ -1,77 +1,96 @@
+"""
+Geometry Test 05 - CREATE: Wall with Direction
+================================================
+
+Prompt:
+    "Create a wall with a length of 5m starting at point (10, 5)
+    pointing to direction (1, 0)."
+
+IFC file: empty.ifc
+Category: Geometry / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcWall with a length of 5m,
+    starting at (10, 5), extending in the +X direction (1, 0). Since the
+    direction is (1, 0), the wall should extend from x=10 to x=15 at y=5.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcWall was created.
+
+    right_dimensions (bool):
+        True if the wall's length along the X-axis is ~5m. Tolerance: ±0.5m.
+
+    right_location (bool):
+        True if the wall starts near (10, 5). Tolerance: ±0.5m.
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
-import math
+from .utils.create_utils import (
+    find_new_elements, get_bbox, within_abs, point_in_bbox_xy,
+    compute_integrity,    check_spatial_containment, check_elements_preserved,
+)
+from .utils.clash_utils import check_clash_integrity
 
-def _bbox_in_meters(product, unit_scale):
-	settings = ifcopenshell.geom.settings()
-	shape = ifcopenshell.geom.create_shape(settings, product)
-	geom = shape.geometry
-	vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-	vertices = vertices * unit_scale
-
-	x_min = float(vertices[:, 0].min())
-	x_max = float(vertices[:, 0].max())
-	y_min = float(vertices[:, 1].min())
-	y_max = float(vertices[:, 1].max())
-	z_min = float(vertices[:, 2].min())
-	z_max = float(vertices[:, 2].max())
-
-	return {
-		"x_min": x_min,
-		"x_max": x_max,
-		"y_min": y_min,
-		"y_max": y_max,
-		"z_min": z_min,
-		"z_max": z_max
-	}
-
-def _within_abs(value, expected, tol):
-	return abs(value - expected) <= tol
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-	metrics = {
-		"object_exists": False,
-		"integrity_constraint": False, # integrity_constraint
-		"right_location": False, # right_location
-		"right_dimensions": False, # right_dimensions
-	}
+    """Prompt: Create a wall with a length of 5m starting at point (10, 5) pointing to direction (1, 0)."""
+    metrics = {
+        "object_exists": False,
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": 0.0,
+    }
 
-	try:
-		ifc_edited = ifcopenshell.open(edited_ifc_file)
-	except Exception:
-		return metrics
-	
-	walls = ifc_edited.by_type("IfcWall")
-	if not walls:
-		return metrics
-	
-	unit_scale = 1.0
-	tol = 0.5
-	
-	for wall in walls:
-		try:
-			bbox = _bbox_in_meters(wall, unit_scale)
-			
-			metrics["object_exists"] = True
-			metrics["integrity_constraint"] = True
+    EXPECTED_LENGTH = 5.0
+    START_X, START_Y = 10.0, 5.0
+    DIM_TOL = 0.5
+    LOC_TOL = 0.5
 
-			match_start_x = _within_abs(bbox["x_min"], 10.0, tol)
-			match_start_y = _within_abs(bbox["y_min"], 5.0, tol) or _within_abs(bbox["y_max"], 5.0, tol)
-			
-			if match_start_x and match_start_y:
-				metrics["right_location"] = True
-				
-				x_len = bbox["x_max"] - bbox["x_min"]
-				y_len = bbox["y_max"] - bbox["y_min"]
-				
-				if x_len > y_len:
-					metrics["right_dimensions"] = True
-				
-				break
-		except:
-			continue
+    ifc_original = ifcopenshell.open(ifc_file)
+    ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-	return metrics
+    new_walls = find_new_elements(ifc_original, ifc_edited, "IfcWall")
+    if not new_walls:
+        return metrics
 
-#toDO chek for 5m length wall
+    metrics["object_exists"] = True
+
+    if len(new_walls) != 1:
+        return metrics
+
+    wall = new_walls[0]
+    try:
+        bbox = get_bbox(wall)
+    except RuntimeError:
+        return metrics
+
+    # right_dimensions: wall length ~5m
+    # direction is (1,0) so length should be along X-axis
+    x_len = bbox["x_len"]
+    y_len = bbox["y_len"]
+    wall_length = max(x_len, y_len)
+    if within_abs(wall_length, EXPECTED_LENGTH, DIM_TOL):
+        metrics["right_dimensions"] = True
+
+    # right_location: starting point (10, 5) near a wall edge
+    match_start_x = within_abs(bbox["x_min"], START_X, LOC_TOL)
+    match_start_y = (within_abs(bbox["y_min"], START_Y, LOC_TOL) or
+                     within_abs(bbox["y_max"], START_Y, LOC_TOL) or
+                     within_abs(bbox["y_c"], START_Y, LOC_TOL))
+
+    if match_start_x and match_start_y:
+        metrics["right_location"] = True
+
+    # integrity
+    sub_checks = [
+        check_spatial_containment(ifc_edited, wall),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[wall.GlobalId], clash_mode="collision"),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
+
+    return metrics

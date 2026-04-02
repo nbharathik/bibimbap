@@ -1,116 +1,110 @@
+"""
+Geometry Test 04 - CREATE: Room Left of Column
+================================================
+
+Prompt:
+    "Insert a room (IfcSpace) to the area that is left of the column
+    with GlobalId = '3A5GfH23DBvBYpavCfWh4z'."
+
+IFC file: 01/01/01_01_004.ifc
+Category: Geometry / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcSpace positioned to the left
+    (-X direction) of the referenced column, within the area bounded by
+    the existing walls. "Left" is interpreted as negative X direction.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcSpace was created.
+
+    right_dimensions (bool):
+        True if the space footprint roughly matches the gap defined by the
+        walls (~6m x 6m). The expected x_max is ~6.35m (left half only).
+
+    right_location (bool):
+        True if the space is located left of the column (within the wall
+        boundary). Accepts both the left-half (~6.35m) and full-footprint
+        (~12.75m) interpretations of "left".
+
+    integrity_constraint (float, 0.0-1.0):
+        Average of: correct IFC type + spatial containment + elements preserved.
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.shape
-
-
-def _bbox_in_meters(product, unit_scale):
-	settings = ifcopenshell.geom.settings()
-	shape = ifcopenshell.geom.create_shape(settings, product)
-	geom = shape.geometry
-	vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-	vertices = vertices * unit_scale
-
-	x_min = float(vertices[:, 0].min())
-	x_max = float(vertices[:, 0].max())
-	y_min = float(vertices[:, 1].min())
-	y_max = float(vertices[:, 1].max())
-	z_min = float(vertices[:, 2].min())
-	z_max = float(vertices[:, 2].max())
-
-	return {
-		"x_min": x_min,
-		"x_max": x_max,
-		"y_min": y_min,
-		"y_max": y_max,
-		"z_min": z_min,
-		"z_max": z_max,
-		"x_len": x_max - x_min,
-		"y_len": y_max - y_min,
-		"z_len": z_max - z_min,
-		"x_c": (x_min + x_max) / 2.0,
-		"y_c": (y_min + y_max) / 2.0,
-		"z_c": (z_min + z_max) / 2.0,
-	}
-
-
-def _within_abs(value, expected, tol):
-	return abs(value - expected) <= tol
+from .utils.create_utils import (
+    find_new_elements, get_bbox, within_abs,
+    compute_integrity,    check_spatial_containment, check_elements_preserved,
+)
+from .utils.clash_utils import check_clash_integrity
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
-	"""Prompt: insert a room (IfcSpace) to the area that is left of the column with id GlobalId = "3A5GfH23DBvBYpavCfWh4z".
+    """Prompt: Insert a room (IfcSpace) to the area that is left of the column with GlobalId = '3A5GfH23DBvBYpavCfWh4z'."""
+    metrics = {
+        "object_exists": False,
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": 0.0,
+    }
 
-	Perfect criteria (all must be true):
-	- a NEW element exists
-	- it is an IfcSpace
-	- it is located left (negative X direction) of the referenced column
-	- it fits within the polygon formed by walls ["3A5GfH23DBvBYpavCfWhSk", "3A5GfH23DBvBYpavCfWhRM", "3A5GfH23DBvBYpavCfWhEJ", "3A5GfH23DBvBYpavCfWh5t", "3A5GfH23DBvBYpavCfWhPk"]
-	- footprint dimensions roughly match the gap defined by those walls (expected about 6m x 6m)
+    TOL = 0.5
+    # expected space boundaries based on the wall geometry
+    TGT_X_MIN = 0.20
+    TGT_Y_MIN, TGT_Y_MAX = 0.20, 6.70
+    TGT_Z_MIN, TGT_Z_MAX = 0.0, 3.0
 
-	Partial credit:
-	- Other classes (IfcBuildingElementProxy, etc.) keep metrics except `is_ifc_space`.
-	- Spaces not bounded by the listed walls fail `within_walls`.
-	"""
+    ifc_original = ifcopenshell.open(ifc_file)
+    ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-	metrics = {
-		"object_exists": False,
-		"integrity_constraint": False, # integrity_constraint
-		"right_location": False, # right_location
-		"right_dimensions": False, # right_dimensions
-	}
+    new_spaces = find_new_elements(ifc_original, ifc_edited, "IfcSpace")
+    if not new_spaces:
+        return metrics
 
-	try:
-		ifc_base = ifcopenshell.open(ifc_file)
-		ifc_edited = ifcopenshell.open(edited_ifc_file)
-	except Exception:
-		return metrics
+    metrics["object_exists"] = True
 
-	unit_scale = 1.0
+    if len(new_spaces) != 1:
+        return metrics
 
-	spaces = [s for s in ifc_edited.by_type("IfcSpace")]
+    space = new_spaces[0]
+    try:
+        space_bbox = get_bbox(space)
+    except RuntimeError:
+        return metrics
 
-	if len(spaces) != 1:
-		return metrics
+    # check common boundary matches
+    common_match = (
+        within_abs(space_bbox["x_min"], TGT_X_MIN, TOL)
+        and within_abs(space_bbox["y_min"], TGT_Y_MIN, TOL)
+        and within_abs(space_bbox["y_max"], TGT_Y_MAX, TOL)
+        and within_abs(space_bbox["z_min"], TGT_Z_MIN, TOL)
+        and within_abs(space_bbox["z_max"], TGT_Z_MAX, TOL)
+    )
 
-	space = spaces[0]
-	try:
-		space_bbox = _bbox_in_meters(space, unit_scale)
-	except Exception:
-		return metrics
+    left_of_column = False
+    footprint_matches = False
 
-	metrics["object_exists"] = True
-	metrics["integrity_constraint"] = bool(space.is_a("IfcSpace"))
+    if common_match:
+        # left half only (~6.35m x_max) - correct answer
+        if within_abs(space_bbox["x_max"], 6.35, TOL):
+            left_of_column = True
+            footprint_matches = True
+        # full footprint (~12.75m x_max) - acceptable location but wrong dimensions
+        elif within_abs(space_bbox["x_max"], 12.75, TOL):
+            left_of_column = True
+            footprint_matches = False
 
-	tgt_x_min = 0.20
-	tgt_y_min, tgt_y_max = 0.20, 6.70
-	tgt_z_min, tgt_z_max = 0.0, 3.0
-	tol = 0.5
+    if left_of_column:
+        metrics["right_location"] = True
+    if footprint_matches:
+        metrics["right_dimensions"] = True
 
-	common_match = (
-		_within_abs(space_bbox["x_min"], tgt_x_min, tol)
-		and _within_abs(space_bbox["y_min"], tgt_y_min, tol)
-		and _within_abs(space_bbox["y_max"], tgt_y_max, tol)
-		and _within_abs(space_bbox["z_min"], tgt_z_min, tol)
-		and _within_abs(space_bbox["z_max"], tgt_z_max, tol)
-	)
+    # integrity
+    sub_checks = [
+        check_spatial_containment(ifc_edited, space),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[space.GlobalId], clash_mode="collision"),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
 
-	# Sometimes it could create for the whole fotprint
-	left_of_column = False
-	within_walls = False
-	footprint_matches = False
-	if common_match:
-		if _within_abs(space_bbox["x_max"], 6.35, tol):
-			left_of_column = True
-			within_walls = True
-			footprint_matches = True
-		elif _within_abs(space_bbox["x_max"], 12.75, tol):
-			left_of_column = True
-			within_walls = True
-			footprint_matches = False
-
-	if left_of_column and within_walls:
-		metrics["right_location"] = True
-	if footprint_matches:
-		metrics["right_dimensions"] = True
-
-	return metrics
+    return metrics

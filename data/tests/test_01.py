@@ -1,106 +1,112 @@
+"""
+Test 01 - Basic CREATE: Door in Wall
+=====================================
+
+Prompt:
+    "Create a door with the size of 2 by 1 meters in the wall with id 2UsXAbj6n0fwEWqdkVuHvf."
+
+IFC file: basic_tasks.ifc
+Category: Basic / Create
+
+What this test evaluates:
+    The LLM must create exactly one new IfcDoor element and place it inside
+    a specific wall. The door must have the correct dimensions and be
+    topologically linked via the standard IFC relationship chain:
+    IfcDoor → IfcRelFillsElement → IfcOpeningElement → IfcRelVoidsElement → IfcWall.
+
+Metrics:
+    object_exists (bool):
+        True if exactly one new IfcDoor was created. If zero or more than one
+        new door is found, the test returns early with only this metric set.
+
+    right_dimensions (bool):
+        True if the door dimensions are 2m × 1m (height × width). Since the
+        prompt "2 by 1" is ambiguous, both orientations are accepted:
+        (height=2, width=1) or (height=1, width=2). Tolerance: ±0.05m.
+
+    right_location (bool):
+        True if the door's bounding box fits entirely within the target wall's
+        bounding box. Tolerance: ±0.1m.
+
+    integrity_constraint (float, 0.0–1.0):
+        Average of the following sub-checks (each 0.0 or 1.0):
+          1. Correct IFC type - element is IfcDoor
+          2. Fills/Voids chain - door fills an opening that voids the target wall
+          3. Spatial containment - door is assigned to a storey via
+              IfcRelContainedInSpatialStructure
+          4. Elements preserved - all original GUIDs still exist in the edited model
+"""
+
 import ifcopenshell
-import ifcopenshell.geom
-import ifcopenshell.util.placement
-import ifcopenshell.util.shape
+from .utils.create_utils import (
+    find_new_elements, get_bbox, get_shape_dims, within_abs, dims_match,
+    bbox_contains_bbox, compute_integrity,    check_spatial_containment,
+    check_elements_preserved, check_fills_voids_chain,
+)
+from .utils.clash_utils import check_clash_integrity
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Create a door with the size of 2 by 1 meters in the wall with id 2UsXAbj6n0fwEWqdkVuHvf."""
     metrics = {
-        "object_exists": False, # door was created
-        "right_location": False, # door is in wall
-        "right_dimensions": False, # door has size 2x1
-        "integrity_constraint": False # door has a topological relationship to wall, ie: does opening exist that is filled?
+        "object_exists": False,
+        "right_location": False,
+        "right_dimensions": False,
+        "integrity_constraint": 0.0,
     }
+
+    WALL_GUID = "2UsXAbj6n0fwEWqdkVuHvf"
+    EXPECTED_DIMS = (2.0, 1.0)  # height x width - accept both orientations
+    DIM_TOL = 0.05
 
     ifc_original = ifcopenshell.open(ifc_file)
     ifc_edited = ifcopenshell.open(edited_ifc_file)
 
-    # get wall and geometry information
-    wall = ifc_edited.by_guid("2UsXAbj6n0fwEWqdkVuHvf")
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, wall)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_wall = min(vertices[:, 0])
-    x_max_wall = max(vertices[:, 0])
-    y_min_wall = min(vertices[:, 1])
-    y_max_wall = max(vertices[:, 1])
-    z_min_wall = min(vertices[:, 2])
-    z_max_wall = max(vertices[:, 2])
+    # get wall bounding box
+    wall = ifc_edited.by_guid(WALL_GUID)
+    try:
+        wall_bbox = get_bbox(wall)
+    except RuntimeError:
+        return metrics
 
-    # check if there is a new door
-    original_door_guids = set(door.GlobalId for door in ifc_original.by_type("IfcDoor"))
-    edited_door_guids = set(door.GlobalId for door in ifc_edited.by_type("IfcDoor"))
-
-    new_door_ids = list(edited_door_guids - original_door_guids)
-
-    if len(new_door_ids) == 0:
+    # find new doors - must be exactly one
+    new_doors = find_new_elements(ifc_original, ifc_edited, "IfcDoor")
+    if not new_doors:
         return metrics
 
     metrics["object_exists"] = True
-    door = ifc_edited.by_guid(new_door_ids[0])
 
+    if len(new_doors) != 1:
+        return metrics
 
-    # get geometry information of the new door
-    settings = ifcopenshell.geom.settings()
-    shape = ifcopenshell.geom.create_shape(settings, door)
-    geom = shape.geometry
-    vertices = ifcopenshell.util.shape.get_shape_vertices(shape, geom)
-    x_min_door = min(vertices[:, 0])
-    x_max_door = max(vertices[:, 0])
-    y_min_door = min(vertices[:, 1])
-    y_max_door = max(vertices[:, 1])
-    z_min_door = min(vertices[:, 2])
-    z_max_door = max(vertices[:, 2])
+    door = new_doors[0]
 
-    width_door = ifcopenshell.util.shape.get_x(geom)
-    height_door = ifcopenshell.util.shape.get_z(geom)
+    try:
+        door_bbox = get_bbox(door)
+    except RuntimeError:
+        return metrics
 
-    # check for right size dimensions
-    if height_door == 2.0 and width_door == 1.0:
+    shape_dims = get_shape_dims(door)
+    if shape_dims is None:
+        return metrics
+    width, depth, height = shape_dims
+
+    # right_dimensions: accept both (2x1) and (1x2) orientations
+    if dims_match((height, width), EXPECTED_DIMS, DIM_TOL) or \
+       dims_match((height, depth), EXPECTED_DIMS, DIM_TOL):
         metrics["right_dimensions"] = True
 
-    # check for right location (door in wall)
-    if x_min_wall <= x_min_door <= x_max_door <= x_max_wall and y_min_wall <= y_min_door <= y_max_door <= y_max_wall and z_min_wall <= z_min_door <= z_max_door <= z_max_wall:
+    # right_location: door bounding box is inside wall bounding box
+    if bbox_contains_bbox(wall_bbox, door_bbox, tol=0.1):
         metrics["right_location"] = True
 
-    # check for new opening
-    original_opening_guids = set(opening.GlobalId for opening in ifc_original.by_type("IfcOpeningElement"))
-    edited_opening_guids = set(opening.GlobalId for opening in ifc_edited.by_type("IfcOpeningElement"))
-
-    new_opening_ids = list(edited_opening_guids - original_opening_guids)
-    if len(new_opening_ids) == 0:
-        return metrics
-
-    opening = ifc_edited.by_guid(new_opening_ids[0])
-
-    # get voids and fills relationships of opening, wall and door and check if they exist and correspond
-    opening_fills_relationship = list(filter(lambda x: x.is_a("IfcRelFillsElement"), ifc_edited.get_inverse(opening)))
-    if len(opening_fills_relationship) == 0:
-        return metrics
-    opening_fills_relationship = opening_fills_relationship[0].GlobalId
-
-    opening_voids_relationship = list(filter(lambda x: x.is_a("IfcRelVoidsElement"), ifc_edited.get_inverse(opening)))
-    if len(opening_voids_relationship) == 0:
-        return metrics
-    opening_voids_relationship = opening_voids_relationship[0].GlobalId
-
-    door_fills_relationship = list(filter(lambda x: x.is_a("IfcRelFillsElement"), ifc_edited.get_inverse(door)))
-    if len(door_fills_relationship) == 0:
-        return metrics
-    door_fills_relationship = door_fills_relationship[0].GlobalId
-
-    wall_voids_relationship = list(filter(lambda x: x.is_a("IfcRelVoidsElement"), ifc_edited.get_inverse(wall)))
-    if len(wall_voids_relationship) == 0:
-        return metrics
-    wall_voids_relationship = wall_voids_relationship[0].GlobalId
-
-
-    if opening_fills_relationship != door_fills_relationship or opening_voids_relationship != wall_voids_relationship:
-        return metrics
-
-    # every integrity constraint true
-    metrics["integrity_constraint"] = True
+    # integrity: average of sub-checks
+    sub_checks = [
+        check_fills_voids_chain(ifc_edited, door, wall),
+        check_spatial_containment(ifc_edited, door),
+        check_clash_integrity(ifc_original, ifc_edited, list_of_targets=[door.GlobalId], clash_mode="collision"),
+        check_elements_preserved(ifc_original, ifc_edited),
+    ]
+    metrics["integrity_constraint"] = compute_integrity(sub_checks)
 
     return metrics
