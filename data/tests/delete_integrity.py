@@ -1,7 +1,7 @@
 import ifcopenshell
 import ifcopenshell.util.element
 
-from integrity_utils import non_target_elements_unchanged
+from data.tests.integrity_utils import non_target_elements_unchanged
 
 def spatial_containment_deleted(original_ifc, edited_ifc, target_guid):
     """Check if the spatial containment relationship was deleted."""
