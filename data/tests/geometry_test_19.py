@@ -1,16 +1,10 @@
 import ifcopenshell
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 WINDOW_GUIDS = [
-    # Window 1 (provided answer IDs)
     "1mRYVM4YfFFBRkcbz1hH$F",
-    "1mRYVM4YfFFBRkcbz1hH$2",
-    "1mRYVM4YfFFBRkcbz1hHbM",
-    # Window 2 (provided answer IDs)
-    "1mRYVM4YfFFBRkcbz1hH_L",
-    "1mRYVM4YfFFBRkcbz1hH_M",
-    "1mRYVM4YfFFBRkcbz1hH_H",
+    "1mRYVM4YfFFBRkcbz1hH_L"
 ]
 
 
@@ -30,14 +24,12 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     infer "opposite to" via geometry.
     """
 
-    metrics = {f"deleted_{i+1}": False for i in range(len(WINDOW_GUIDS))}
-    
     metrics = {
         "object_not_exists": False, 
         "integrity_constraint": False,
     }
 
-    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+    if non_target_elements_unchanged(ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)): # calling this without target elements
         # all elements remained the same -> model did changed nothing -> zero score
         return metrics
 

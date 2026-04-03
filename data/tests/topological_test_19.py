@@ -1,6 +1,6 @@
 import ifcopenshell
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Remove column that is inside of the walls with the ids 3Vyqk8cSj8TOuAk6zHUwIV, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwMJ, 3Vyqk8cSj8TOuAk6zHUwNQ"""
@@ -22,7 +22,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
             if getattr(obj, "GlobalId", None)
         }
 
-    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+    if non_target_elements_unchanged(ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)): # calling this without target elements
         # all elements remained the same -> model did changed nothing -> zero score
         return metrics
 
