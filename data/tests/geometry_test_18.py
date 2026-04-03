@@ -39,7 +39,7 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
         "integrity_constraint": False,
     }
 
-    if non_target_elements_unchanged(ifc_file, edited_ifc_file): # calling this without target elements
+    if non_target_elements_unchanged(ifcopenshell.open(ifc_file), ifcopenshell.open(edited_ifc_file)): # calling this without target elements
         # all elements remained the same -> model did changed nothing -> zero score
         return metrics
 

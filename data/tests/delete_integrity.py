@@ -117,7 +117,6 @@ def run_delete_integrity_check(ifc_file, edited_ifc_file, target_guids):
             openings_deleted(original_ifc, edited_ifc, target_guid),
             aggregations_deleted(original_ifc, edited_ifc, target_guid)
         ]
-        print(sub_categories)
         delete_integrity = delete_integrity and all(sub_categories)
 
     return delete_integrity and non_target_elements_unchanged(original_ifc, edited_ifc, target_guids)
