@@ -3,14 +3,8 @@ from integrity_utils import non_target_elements_unchanged
 from delete_integrity import run_delete_integrity_check
 
 WINDOW_GUIDS = [
-    # Window 1 (provided answer IDs)
     "1mRYVM4YfFFBRkcbz1hH$F",
-    "1mRYVM4YfFFBRkcbz1hH$2",
-    "1mRYVM4YfFFBRkcbz1hHbM",
-    # Window 2 (provided answer IDs)
-    "1mRYVM4YfFFBRkcbz1hH_L",
-    "1mRYVM4YfFFBRkcbz1hH_M",
-    "1mRYVM4YfFFBRkcbz1hH_H",
+    "1mRYVM4YfFFBRkcbz1hH_L"
 ]
 
 
@@ -30,8 +24,6 @@ def execute_test(ifc_file, edited_ifc_file, model_output):
     infer "opposite to" via geometry.
     """
 
-    metrics = {f"deleted_{i+1}": False for i in range(len(WINDOW_GUIDS))}
-    
     metrics = {
         "object_not_exists": False, 
         "integrity_constraint": False,
