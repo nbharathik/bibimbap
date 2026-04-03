@@ -4,8 +4,8 @@ import ifcopenshell
 DELETED_DOOR_GUID = "1g0NIEjcH1lfGqbYWRqt6L"
 DELETED_OPENING_GUID = "0GJ5vHxGEC4l1pTWzlPYoU"
 
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def _safe_by_guid(ifc, guid: str):
     try:

@@ -1,7 +1,7 @@
 import ifcopenshell
 
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Remove the door with id 11kJIqz$n2Jf_DfJV1SDY7."""

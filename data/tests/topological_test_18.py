@@ -1,7 +1,7 @@
 import ifcopenshell
 
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
     """Prompt: Delete the room that is enclosed by the walls with ids 3Vyqk8cSj8TOuAk6zHUwNQ, 3Vyqk8cSj8TOuAk6zHUwAt, 3Vyqk8cSj8TOuAk6zHUwAc, 3Vyqk8cSj8TOuAk6zHUwBs, 3Vyqk8cSj8TOuAk6zHUw89, 3Vyqk8cSj8TOuAk6zHUwIV."""

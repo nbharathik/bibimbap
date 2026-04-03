@@ -13,8 +13,8 @@ WALL_GUIDS = [
     "1u4oG4Ltr15fMWjwJ4pNV8",
 ]
 
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def _exists(ifc, guid: str) -> bool:
     try:

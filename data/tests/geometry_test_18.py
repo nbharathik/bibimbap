@@ -15,8 +15,8 @@ WINDOW_GUIDS = [
 ]
 
 
-from integrity_utils import non_target_elements_unchanged
-from delete_integrity import run_delete_integrity_check
+from data.tests.integrity_utils import non_target_elements_unchanged
+from data.tests.delete_integrity import run_delete_integrity_check
 
 def _safe_by_guid(ifc, guid: str):
     try:
