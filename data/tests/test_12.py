@@ -11,8 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from data.tests.integrity_utils import check_integrity
-from data.updated_tests._integrity_utils import filled_opening_guid
+from data.tests.integrity_utils import check_integrity, filled_opening_guid
 
 
 DOOR_GUID = "11kJIqz$n2Jf_DfJV1SDY7"
