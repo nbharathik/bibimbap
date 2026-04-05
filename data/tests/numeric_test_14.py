@@ -1,4 +1,4 @@
-from data.tests.utils import extract_numeric_value, within_tolerance
+from data.tests.utils2 import extract_numeric_value, within_tolerance
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):

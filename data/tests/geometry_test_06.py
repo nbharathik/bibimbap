@@ -1,5 +1,5 @@
 
-from data.tests.utils import extract_numeric_value
+from data.tests.utils2 import extract_numeric_value
 
 
 def execute_test(ifc_file, edited_ifc_file, model_output):
