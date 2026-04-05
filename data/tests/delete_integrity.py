@@ -26,13 +26,17 @@ def wall_connections_deleted(original_ifc, edited_ifc, target_guid):
     """Check if the wall connections were deleted."""
     original_wall = original_ifc.by_guid(target_guid)
 
-    original_connections = original_wall.ConnectedTo + original_wall.ConnectedFrom
+    if hasattr(original_wall, "ConnectedFrom") and hasattr(original_wall, "ConnectedTo"):
+        original_connections = original_wall.ConnectedTo + original_wall.ConnectedFrom
+    else:
+        original_connections = []
+
     original_set = set(map(lambda x: x.GlobalId, original_connections))
     edited_connections = edited_ifc.by_type("IfcRelConnectsPathElements")
 
     edited_set = set(map(lambda x: x.GlobalId, edited_connections))
 
-    if set(original_set).issubset(set(edited_set)):
+    if len(original_set) > 0 and set(original_set).issubset(set(edited_set)):
         # original relationships still exist in the edited file
         return False
     return True
