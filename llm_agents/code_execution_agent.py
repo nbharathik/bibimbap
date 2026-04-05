@@ -13,7 +13,7 @@ from typing import ClassVar, Tuple
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from .base import BaseLLMAgent
 from .runtime.runtime_core import is_recursion_error
@@ -49,14 +49,16 @@ class ExecuteIFCCodeTool(BaseTool):
 
     name: str = "execute_ifc_code"
     description: str = (
-        "Execute Python code using ifcopenshell on a given IFC file. "
-        "Inputs: {code: str, ifc_file_path: str}. "
-        "The tool loads the IFC as variable `ifc`, provides `commit()` to save, "
-        "and you can set `result` to return a value."
+        "Execute Python code against the current IFC file. Input: {code: str}.\n"
+        "The IFC model is pre-loaded as `ifc` (ifcopenshell.file). "
+        "Also available: `ifcopenshell`, `api` (ifcopenshell.api), "
+        "`util` (ifcopenshell.util), `element_util` (ifcopenshell.util.element), `guid` (ifcopenshell.guid).\n"
+        "Assign to `result` to return data. Call `commit()` to save modifications."
     )
 
     timeout_seconds: int = 45
     force_subprocess: bool = False
+    _default_ifc_file_path: str | None = PrivateAttr(default=None)
 
     RISKY_MARKERS: ClassVar[Tuple[str, ...]] = (
         "ifcopenshell.geom",
@@ -70,6 +72,9 @@ class ExecuteIFCCodeTool(BaseTool):
     def _looks_risky(self, code: str) -> bool:
         c = code or ""
         return any(m in c for m in self.RISKY_MARKERS)
+
+    def set_default_ifc_file_path(self, ifc_file_path: str | None) -> None:
+        self._default_ifc_file_path = ifc_file_path
 
     def _run_in_process(self, code: str, ifc_file_path: str) -> dict:
         try:
@@ -305,16 +310,27 @@ class ExecuteIFCCodeTool(BaseTool):
                     "backend": "subprocess",
                 }
 
-    def _run(self, code: str, ifc_file_path: str) -> dict:
+    def _run(self, code: str, **_kwargs) -> dict:
+        effective_ifc_file_path = self._default_ifc_file_path
+        if not effective_ifc_file_path:
+            return {
+                "status": "error",
+                "error": "MISSING_IFC_FILE_PATH",
+                "stdout": "",
+                "stderr": "",
+                "result": None,
+                "backend": "in_process",
+            }
+
         force = self.force_subprocess
         risky = self._looks_risky(code)
         backend = "subprocess" if (force or risky) else "in_process"
 
         if backend == "subprocess":
-            return self._run_subprocess(code, ifc_file_path)
-        return self._run_in_process(code, ifc_file_path)
+            return self._run_subprocess(code, effective_ifc_file_path)
+        return self._run_in_process(code, effective_ifc_file_path)
 
-    async def _arun(self, code: str, ifc_file_path: str) -> dict:
+    async def _arun(self, code: str, ifc_file_path: str | None = None) -> dict:
         return await asyncio.to_thread(self._run, code=code, ifc_file_path=ifc_file_path)
 
 
@@ -335,6 +351,7 @@ class CodeExecutionAgent(BaseLLMAgent):
             timeout_seconds=int(self.agent_config.get("tool_timeout", 45)),
             force_subprocess=bool(self.agent_config.get("force_subprocess", False)),
         )
+        self._runner: asyncio.Runner | None = None
 
     async def _ainvoke(
         self, prompt: str, ifc_path: str, output_format: type[BaseModel] | None
@@ -344,6 +361,7 @@ class CodeExecutionAgent(BaseLLMAgent):
         self.tool_call_iterations = []
         self.last_error = None
         self.last_recursion_error = False
+        self.execute_ifc_tool.set_default_ifc_file_path(ifc_path)
 
         tools = [self.execute_ifc_tool]
         agent = (
@@ -413,6 +431,7 @@ class CodeExecutionAgent(BaseLLMAgent):
         finally:
             if usage_cb_cm is not None:
                 usage_cb_cm.__exit__(None, None, None)
+            self.execute_ifc_tool.set_default_ifc_file_path(None)
 
         messages = extract_messages_from_events(chain)
         model_output, parsed_iterations, parsed_in, parsed_out = (
@@ -434,4 +453,19 @@ class CodeExecutionAgent(BaseLLMAgent):
         return model_output
 
     def invoke(self, prompt: str, ifc_path: str, output_format: type[BaseModel] | None):
-        return asyncio.run(self._ainvoke(prompt=prompt, ifc_path=ifc_path, output_format=output_format))
+        if self._runner is None:
+            self._runner = asyncio.Runner()
+        return self._runner.run(
+            self._ainvoke(prompt=prompt, ifc_path=ifc_path, output_format=output_format)
+        )
+
+    def close(self) -> None:
+        if self._runner is not None:
+            self._runner.close()
+            self._runner = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
