@@ -24,6 +24,9 @@ from pathlib import Path
 
 import pandas as pd
 
+DEFAULT_SEMANTIC_SPLITS = [20, 20, 20, 20, 20]
+DEFAULT_SEMANTIC_LABELS = ["basic", "geometry", "topology", "numeric", "conceptual"]
+
 
 # Cache discovery helpers
 def get_latest_run_dir(results_base_dir: Path) -> Path | None:
@@ -272,7 +275,7 @@ def summarize_metrics(df_metrics: pd.DataFrame, group_cols: list[str]) -> pd.Dat
 
 
 def assign_semantic_categories(
-    df_samples: pd.DataFrame, splits: list[int]
+    df_samples: pd.DataFrame, splits: list[int], labels: list[str] | None = None
 ) -> pd.Series:
     question_ids = df_samples["Question ID"]
     ids_series = question_ids.dropna()
@@ -293,16 +296,27 @@ def assign_semantic_categories(
     mapping: dict[object, str] = {}
     start = 0
     category_index = 1
+    labels = labels or []
     for size in splits:
         end = start + size
+        category_name = (
+            labels[category_index - 1]
+            if category_index - 1 < len(labels)
+            else f"Category {category_index}"
+        )
         for qid in ordered_ids[start:end]:
-            mapping[qid] = f"Category {category_index}"
+            mapping[qid] = category_name
         start = end
         category_index += 1
 
     if start < len(ordered_ids):
+        category_name = (
+            labels[category_index - 1]
+            if category_index - 1 < len(labels)
+            else f"Category {category_index}"
+        )
         for qid in ordered_ids[start:]:
-            mapping[qid] = f"Category {category_index}"
+            mapping[qid] = category_name
 
     return question_ids.map(mapping).fillna("unknown")
 
@@ -333,17 +347,26 @@ def write_run_outputs(
     df_tools: pd.DataFrame,
     run_id: str,
     output_dir: Path,
-    semantic_splits: list[int] | None,
+    semantic_splits: list[int],
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if df_samples.empty:
         print(f"No results found for {run_id}.")
         return
-    if semantic_splits is not None:
-        df_samples = df_samples.copy()
-        df_samples["Semantic Category"] = assign_semantic_categories(
-            df_samples, semantic_splits
+    df_samples = df_samples.copy()
+    df_samples["Semantic Category"] = assign_semantic_categories(
+        df_samples, semantic_splits, DEFAULT_SEMANTIC_LABELS
+    )
+    if not df_metrics.empty:
+        metric_categories = (
+            df_samples[["Question ID", "Semantic Category"]]
+            .drop_duplicates(subset=["Question ID"])
+        )
+        df_metrics = df_metrics.merge(
+            metric_categories,
+            on="Question ID",
+            how="left",
         )
 
     multi_suffix = f"_{run_id}" if run_id else ""
@@ -355,14 +378,12 @@ def write_run_outputs(
     category_summary = summarize_groups(df_samples, ["Source CSV"])
     crud_summary = summarize_groups(df_samples, ["CRUD Operation"])
     category_crud_summary = summarize_groups(df_samples, ["Source CSV", "CRUD Operation"])
-    semantic_summary = (
-        summarize_groups(df_samples, ["Semantic Category"])
-        if semantic_splits is not None
-        else None
-    )
+    semantic_summary = summarize_groups(df_samples, ["Semantic Category"])
+    semantic_crud_summary = summarize_groups(df_samples, ["Semantic Category", "CRUD Operation"])
 
     metrics_summary = summarize_metrics(df_metrics, [])
     metrics_by_category = summarize_metrics(df_metrics, ["Source CSV", "CRUD Operation"])
+    metrics_by_semantic = summarize_metrics(df_metrics, ["Semantic Category"])
 
     if df_tools.empty:
         tools_summary = pd.DataFrame(columns=["Tool Name", "Times Used"])
@@ -396,11 +417,15 @@ def write_run_outputs(
         f.write(category_summary.to_string(index=False))
         f.write("\n\n")
 
-        if semantic_summary is not None:
-            f.write("STATISTICS BY SEMANTIC CATEGORY\n")
-            f.write("-" * 80 + "\n")
-            f.write(semantic_summary.to_string(index=False))
-            f.write("\n\n")
+        f.write("STATISTICS BY SEMANTIC CATEGORY\n")
+        f.write("-" * 80 + "\n")
+        f.write(semantic_summary.to_string(index=False))
+        f.write("\n\n")
+
+        f.write("STATISTICS BY SEMANTIC CATEGORY AND CRUD\n")
+        f.write("-" * 80 + "\n")
+        f.write(semantic_crud_summary.to_string(index=False))
+        f.write("\n\n")
 
         f.write("STATISTICS BY CRUD OPERATION\n")
         f.write("-" * 80 + "\n")
@@ -432,13 +457,25 @@ def write_run_outputs(
             f.write("No metrics recorded")
         f.write("\n")
 
+        f.write("\nMETRICS SUMMARY BY SEMANTIC CATEGORY\n")
+        f.write("-" * 80 + "\n")
+        if not metrics_by_semantic.empty:
+            metrics_by_semantic = metrics_by_semantic.copy()
+            metrics_by_semantic["Success Rate"] = metrics_by_semantic["Mean"].apply(
+                lambda v: f"{v * 100:.1f}%"
+            )
+            f.write(metrics_by_semantic.to_string(index=False))
+        else:
+            f.write("No metrics recorded")
+        f.write("\n")
+
     print(f"Detailed results saved to: {detailed_csv}")
     print(f"Summary text saved to: {summary_txt}")
 
 
 # Main analysis flow
 def analyze_cache_files(
-    cache_files: list[Path], output_dir: Path, semantic_splits: list[int] | None
+    cache_files: list[Path], output_dir: Path, semantic_splits: list[int]
 ) -> None:
     run_summaries = []
     all_samples = []
@@ -587,12 +624,11 @@ def main() -> None:
         output_dir = Path.cwd()
 
     semantic_splits = args.semantic_splits
-    if semantic_splits is not None:
-        if len(semantic_splits) == 0:
-            semantic_splits = [20, 20, 20, 20, 20]
-        if any(size <= 0 for size in semantic_splits):
-            print("Semantic splits must be positive integers.")
-            return
+    if semantic_splits is None or len(semantic_splits) == 0:
+        semantic_splits = DEFAULT_SEMANTIC_SPLITS.copy()
+    if any(size <= 0 for size in semantic_splits):
+        print("Semantic splits must be positive integers.")
+        return
 
     analyze_cache_files(cache_files, output_dir, semantic_splits)
 
