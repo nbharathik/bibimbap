@@ -257,6 +257,17 @@
         .results-table .best {
             font-weight: bold;
         }
+        .results-table .std {
+            color: #888;
+            font-size: 0.85em;
+        }
+        .results-note {
+            font-size: 0.85em;
+            color: #666;
+            text-align: left;
+            padding: 0 20px 10px 20px;
+            margin-top: -10px;
+        }
 
         /* --- Task category pills --- */
         .category-pills {
@@ -386,9 +397,6 @@
 
             <div class="header-actions">
                 <a class="button" href="#" target="_blank">
-                    <i class="fas fa-file-pdf"></i> Arxiv
-                </a>
-                <a class="button" href="#" target="_blank">
                     <i class="fas fa-database"></i> HuggingFace
                 </a>
                 <a class="button" href="https://github.com/nbharathik/bibimbap" target="_blank">
@@ -411,7 +419,7 @@
         <div style="max-width: 800px; margin: auto;">
             <h3>Abstract</h3>
 
-            <p style="padding: 40px; padding-top: 0; padding-bottom: 20px;">Large Language Models (LLMs) are increasingly used as natural-language interfaces for Building Information Modeling (BIM), yet the community lacks a benchmark to evaluate whether LLM-driven systems can reliably edit Industry Foundation Classes (IFC) models beyond information retrieval. We introduce <b>BIBIMBAP</b>, a Text-to-BIM benchmark with <b>100 curated tasks</b> spanning the full set of <b>CRUD operations</b> and organized into spatial, geometric, topological, numeric, and conceptual understanding tasks. Each task provides a natural-language prompt, a reference IFC model, structured expected outputs, and executable test scripts to enable reproducible, automated evaluation. We run baseline experiments across multiple LLMs using a simple code-execution setup. The results show limited overall success, with common failures in preserving BIM constraints and spatial reasoning. Overall, BIBIMBAP provides a foundation for comparing Text-to-BIM systems and analyzing their failure modes.</p>
+            <p style="padding: 40px; padding-top: 0; padding-bottom: 20px;">Large Language Models (LLMs) are emerging as natural-language interfaces for Building Information Modeling (BIM), successfully achieving information retrieval, but no benchmark exists to evaluate their ability to edit Industry Foundation Classes (IFC). We introduce BIBIMBAP, a Text-to-BIM benchmark with 100 curated tasks covering Create-Read-Update-Delete (CRUD) operations across spatial, geometric, topological, numeric, and conceptual categories. Each task includes a natural-language prompt, an IFC model, expected structured outputs, and test scripts for automated evaluation. Baseline results show limited performance (best: 50.2%) and frequent failures in constraint preservation and spatial reasoning, with some correct outputs achieved despite flawed reasoning. </p>
         </div>
     </div>
 
@@ -421,7 +429,7 @@
 
             <ul class="contrib-list" style="padding-left: 60px; padding-right: 40px; padding-bottom: 20px;">
                 <li><b>Full CRUD Task Suite</b><br>
-                A set of 100 Text-to-BIM tasks spanning the full CRUD operations (Create, Read, Update, Delete) and multiple reasoning categories: basic, spatial, topological, numeric, and conceptual.
+                A set of 100 Text-to-BIM tasks spanning the full CRUD operations (Create, Read, Update, Delete) and multiple reasoning categories: direct, spatial, topological, numeric, and conceptual.
                 </li>
                 <li><b>Standardized Prompt Grammar</b><br>
                 A prompt grammar (operator / operand / context specifiers) that standardizes task formulation and supports systematic analysis and extensibility of the benchmark.
@@ -430,7 +438,7 @@
                 An automated pipeline with procedural tests and fine-grained evaluation metrics (existence, location, dimensions, correctness, and IFC integrity constraints) that enables reproducible, deterministic evaluation without LLM-as-a-judge.
                 </li>
                 <li><b>Baseline Experiments</b><br>
-                A validation of the benchmark across multiple LLMs (Claude Opus 4.5, Claude Sonnet 4.5, Gemini 3 Flash, GPT-5.2, GPT-5 Mini, GPT-4.1), establishing baselines and analyzing common failure modes.
+                A validation of the benchmark across multiple LLMs (Claude Opus 4.6, GPT-5.4, Gemini 3 Flash, GPT-5.2, GPT-5 Mini, GPT-4.1), establishing baselines and analyzing common failure modes.
                 </li>
             </ul>
         </div>
@@ -442,7 +450,7 @@
             <h3>Task Categories</h3>
             <p>Tasks are organized by CRUD operation and further grouped by reasoning requirements:</p>
             <ul style="padding-left: 80px; padding-right: 40px; padding-bottom: 10px;">
-                <li><b>Basic:</b> Tasks where all required information is explicitly provided in the prompt (e.g., create a wall at given coordinates).</li>
+                <li><b>Direct:</b> Tasks where all required information is explicitly provided in the prompt (e.g., create a wall at given coordinates).</li>
                 <li><b>Spatial:</b> Tasks requiring understanding of spatial/geometric concepts (e.g., place a window centered on the longest wall).</li>
                 <li><b>Topological:</b> Tasks requiring understanding of topological relationships between IFC elements (e.g., move a door from one wall to another).</li>
                 <li><b>Numeric:</b> Tasks requiring numerical computation or aggregation (e.g., compute total floor area).</li>
@@ -485,7 +493,7 @@
     <div id="results" style="width: 100%; background-color: white;">
         <div style="max-width: 800px; margin: auto;">
             <h3>Results</h3>
-            <p style="padding: 0 40px 10px 40px;">We evaluated six LLMs on BIBIMBAP using a simple code-execution setup with IfcOpenShell. The results reveal limited overall success, with all models scoring below 40% on average.</p>
+            <p style="padding: 0 40px 10px 40px;">We evaluated six LLMs on BIBIMBAP using a simple code-execution setup with IfcOpenShell. Overall success remains limited: the best model, Claude Opus 4.6, reaches only 50.2% on average, while the remaining models score between 24% and 31%. The top three models (Claude Opus 4.6, GPT-5.4, Gemini 3 Flash) are averaged over three runs (mean &plusmn; std. dev.); the others are single-run.</p>
 
             <h4 style="text-align: center; padding-left: 0;">Model Performance by Category (%)</h4>
             <div class="results-table-wrapper">
@@ -493,7 +501,7 @@
                     <thead>
                         <tr>
                             <th>Model</th>
-                            <th>Basic (20)</th>
+                            <th>Direct (20)</th>
                             <th>Spatial (20)</th>
                             <th>Topological (20)</th>
                             <th>Numeric (20)</th>
@@ -503,64 +511,65 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Claude Opus 4.5</td>
-                            <td>46.3</td>
-                            <td class="best">60.8</td>
-                            <td>38.8</td>
-                            <td class="best">30.0</td>
-                            <td>20.0</td>
-                            <td class="best">39.2</td>
+                            <td>Claude Opus 4.6</td>
+                            <td class="best">65.83<span class="std"> &plusmn;0.16</span></td>
+                            <td class="best">63.89<span class="std"> &plusmn;0.22</span></td>
+                            <td class="best">53.06<span class="std"> &plusmn;0.19</span></td>
+                            <td class="best">38.33<span class="std"> &plusmn;0.24</span></td>
+                            <td class="best">30.00<span class="std"> &plusmn;0.21</span></td>
+                            <td class="best">50.22<span class="std"> &plusmn;0.22</span></td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5.4</td>
+                            <td>62.15<span class="std"> &plusmn;0.40</span></td>
+                            <td>42.08<span class="std"> &plusmn;0.24</span></td>
+                            <td>20.56<span class="std"> &plusmn;0.10</span></td>
+                            <td>26.67<span class="std"> &plusmn;0.22</span></td>
+                            <td>5.00<span class="std"> &plusmn;0.00</span></td>
+                            <td>31.29<span class="std"> &plusmn;0.04</span></td>
                         </tr>
                         <tr>
                             <td>Gemini 3 Flash</td>
-                            <td class="best">54.2</td>
-                            <td>45.8</td>
-                            <td class="best">44.2</td>
-                            <td>5.0</td>
-                            <td>15.0</td>
-                            <td>32.8</td>
+                            <td>65.42<span class="std"> &plusmn;10.4</span></td>
+                            <td>40.97<span class="std"> &plusmn;1.73</span></td>
+                            <td>21.11<span class="std"> &plusmn;3.37</span></td>
+                            <td>20.00<span class="std"> &plusmn;5.00</span></td>
+                            <td>6.67<span class="std"> &plusmn;2.33</span></td>
+                            <td>30.83<span class="std"> &plusmn;1.91</span></td>
                         </tr>
                         <tr>
-                            <td>GPT-5.2</td>
-                            <td>42.5</td>
-                            <td>36.0</td>
-                            <td>30.0</td>
-                            <td>5.0</td>
-                            <td class="best">25.0</td>
-                            <td>27.7</td>
+                            <td>GPT-5.2*</td>
+                            <td>52.50</td>
+                            <td>34.58</td>
+                            <td>35.42</td>
+                            <td>5.00</td>
+                            <td>25.00</td>
+                            <td>30.50</td>
                         </tr>
                         <tr>
-                            <td>Claude Sonnet 4.5</td>
-                            <td>47.9</td>
-                            <td>36.6</td>
-                            <td>32.9</td>
-                            <td>10.0</td>
-                            <td>10.0</td>
-                            <td>27.5</td>
+                            <td>GPT-5 Mini*</td>
+                            <td>50.94</td>
+                            <td>25.83</td>
+                            <td>25.83</td>
+                            <td>0.00</td>
+                            <td>25.00</td>
+                            <td>25.00</td>
                         </tr>
                         <tr>
-                            <td>GPT-5 Mini</td>
-                            <td>35.0</td>
-                            <td>33.5</td>
-                            <td>27.9</td>
-                            <td>0.0</td>
-                            <td class="best">25.0</td>
-                            <td>24.3</td>
-                        </tr>
-                        <tr>
-                            <td>GPT-4.1</td>
-                            <td>17.5</td>
-                            <td>34.2</td>
-                            <td>21.7</td>
-                            <td>0.0</td>
-                            <td>20.0</td>
-                            <td>18.7</td>
+                            <td>GPT-4.1*</td>
+                            <td>38.33</td>
+                            <td>30.00</td>
+                            <td>31.25</td>
+                            <td>0.00</td>
+                            <td>20.00</td>
+                            <td>23.92</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <p class="results-note">* Single-run results. The top three models are averaged over three runs (mean &plusmn; std. dev.). Bold marks the best score in each column.</p>
 
-            <h4 style="text-align: center; padding-left: 0;">CRUD Operation Success Share by Model (%)</h4>
+            <h4 style="text-align: center; padding-left: 0;">CRUD Operation Success Rate by Model (%)</h4>
             <div class="results-table-wrapper">
                 <table class="results-table">
                     <thead>
@@ -574,50 +583,51 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Claude Opus 4.5</td>
-                            <td class="best">73.3</td>
-                            <td>30.9</td>
-                            <td>37.8</td>
-                            <td>36.7</td>
+                            <td>Claude Opus 4.6</td>
+                            <td class="best">81.1<span class="std"> &plusmn;0.2</span></td>
+                            <td class="best">47.3<span class="std"> &plusmn;0.3</span></td>
+                            <td class="best">61.5<span class="std"> &plusmn;0.2</span></td>
+                            <td>18.9<span class="std"> &plusmn;0.1</span></td>
+                        </tr>
+                        <tr>
+                            <td>GPT-5.4</td>
+                            <td>56.0<span class="std"> &plusmn;0.3</span></td>
+                            <td>22.4<span class="std"> &plusmn;0.0</span></td>
+                            <td>50.4<span class="std"> &plusmn;0.3</span></td>
+                            <td>20.0<span class="std"> &plusmn;0.2</span></td>
                         </tr>
                         <tr>
                             <td>Gemini 3 Flash</td>
-                            <td>53.3</td>
-                            <td>43.3</td>
-                            <td>23.6</td>
-                            <td>35.5</td>
+                            <td>45.6<span class="std"> &plusmn;8.4</span></td>
+                            <td>20.6<span class="std"> &plusmn;1.1</span></td>
+                            <td>46.7<span class="std"> &plusmn;2.2</span></td>
+                            <td>37.8<span class="std"> &plusmn;6.9</span></td>
                         </tr>
                         <tr>
-                            <td>GPT-5.2</td>
-                            <td>60.0</td>
+                            <td>GPT-5.2*</td>
+                            <td>58.9</td>
                             <td>18.2</td>
+                            <td>51.1</td>
                             <td>26.7</td>
-                            <td>31.3</td>
                         </tr>
                         <tr>
-                            <td>Claude Sonnet 4.5</td>
-                            <td>30.0</td>
-                            <td>18.2</td>
-                            <td class="best">46.6</td>
-                            <td class="best">40.0</td>
-                        </tr>
-                        <tr>
-                            <td>GPT-5 Mini</td>
-                            <td>38.3</td>
-                            <td class="best">54.7</td>
+                            <td>GPT-5 Mini*</td>
+                            <td>31.2</td>
                             <td>10.9</td>
-                            <td>28.9</td>
+                            <td>55.5</td>
+                            <td class="best">43.3</td>
                         </tr>
                         <tr>
-                            <td>GPT-4.1</td>
-                            <td>26.7</td>
-                            <td>40.0</td>
+                            <td>GPT-4.1*</td>
+                            <td>29.4</td>
                             <td>9.0</td>
-                            <td>24.4</td>
+                            <td>60.0</td>
+                            <td>36.6</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+            <p class="results-note">* Single-run results. The top three models are averaged over three runs (mean &plusmn; std. dev.). Bold marks the best score in each column.</p>
 
             <div style="text-align: center; padding: 10px 20px 10px 20px;">
                 <img src="assets/metrics.png" style="width: 70%; max-width: 500px;" alt="Radar chart showing model performance across six evaluation criteria">
@@ -626,10 +636,11 @@
 
             <h3 style="text-align: center; padding-left: 0;">Key Findings</h3> 
             <ul style="padding-left: 80px; padding-right: 40px; padding-bottom: 20px;">
-                <li><b>Claude Opus 4.5</b> achieves the highest overall score (39.2%), excelling in spatial reasoning (60.8%) and element creation (73.3%).</li>
-                <li><b>Numeric tasks</b> are the hardest category across all models, with most scoring below 10%.</li>
-                <li><b>No model dominates all categories</b>. Strengths vary across CRUD operations and reasoning types.</li>
-                <li>Even when code executes successfully, models often fail at correct element selection, proper computations, or maintaining consistent IFC integrity.</li>
+                <li><b>Claude Opus 4.6</b> achieves the highest overall score (50.2%), leading in every category and excelling at element creation (81.1%).</li>
+                <li><b>Even the best model solves only about half the tasks</b>, showing that reliable Text-to-BIM manipulation remains challenging.</li>
+                <li><b>Numeric-calculative tasks</b> are the most difficult category for all models, requiring multi-step aggregation and computation from geometry.</li>
+                <li><b>Integrity constraints</b> are the hardest evaluation criterion: models can create or delete entities but struggle to keep IFC relationships consistent.</li>
+                <li><b>Iterative tool use helps</b>: Claude Opus 4.6 makes the most tool calls (~4.9 per task) and achieves the strongest results.</li>
             </ul>
         </div>
     </div>
